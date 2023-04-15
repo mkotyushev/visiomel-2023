@@ -48,3 +48,13 @@ RUN /root/miniconda3/envs/visiomel-2023/bin/pip install \
 # Add repo folder to PYTHONPATH
 ENV PYTHONPATH="/workspaces/visiomel-2023:${PYTHONPATH}"
 ARG PYTHONPATH="/workspaces/visiomel-2023:${PYTHONPATH}"
+
+# Install AWS CLI
+RUN \
+    apt update && \
+    apt-get -y install curl
+RUN \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -fr aws awscliv2.zip
