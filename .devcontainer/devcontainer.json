@@ -3,7 +3,7 @@
 	"dockerComposeFile": "../docker-compose.yml",
 	
 	"service": "dev",
-	"workspaceFolder": "/workspace/<<[repository_name]>>",
+	"workspaceFolder": "/workspace/visiomel-2023",
 	"customizations": {
 		"vscode": {
 			"extensions": [
