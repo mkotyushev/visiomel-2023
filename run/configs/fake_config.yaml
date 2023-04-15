@@ -1,4 +1,4 @@
-# lightning.pytorch==2.0.1
+# pytorch_lightning==2.0.1
 seed_everything: 0
 trainer:
   accelerator: auto
@@ -10,7 +10,7 @@ trainer:
   callbacks:
     - class_path: src.data.fake_prediction_writer.FakePredictionWriter
       init_args:
-        submission_save_path: ./submission.txt
+        submission_save_path: ./submission2.txt
   fast_dev_run: false
   max_epochs: 10
   min_epochs: null

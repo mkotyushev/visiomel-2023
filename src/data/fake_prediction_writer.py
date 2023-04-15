@@ -1,4 +1,4 @@
-from lightning.pytorch.callbacks import BasePredictionWriter
+from pytorch_lightning.callbacks import BasePredictionWriter
 
 
 class FakePredictionWriter(BasePredictionWriter):

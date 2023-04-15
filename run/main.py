@@ -1,5 +1,5 @@
 import sys
-from lightning.pytorch.cli import LightningCLI
+from pytorch_lightning.cli import LightningCLI
 
 
 def cli_main():

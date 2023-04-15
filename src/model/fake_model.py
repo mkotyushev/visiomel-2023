@@ -1,4 +1,4 @@
-from lightning.pytorch.demos.boring_classes import DemoModel
+from pytorch_lightning.demos.boring_classes import DemoModel
 
 
 class FakeModel(DemoModel):

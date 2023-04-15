@@ -1,5 +1,5 @@
 import torch
-from lightning.pytorch.demos.boring_classes import BoringDataModule
+from pytorch_lightning.demos.boring_classes import BoringDataModule
 
 
 class FakeDataModule(BoringDataModule):
