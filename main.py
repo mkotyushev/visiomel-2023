@@ -1,6 +1,7 @@
 import importlib
 import torch
 import yaml
+from pytorch_lightning import seed_everything    
 
 
 CONFIG_PATH = 'run/configs/fake_config.yaml'
@@ -13,6 +14,8 @@ def get_class(class_path):
 
 
 def main():
+    seed_everything(0)
+
     # Get classes
     with open(CONFIG_PATH, 'r') as f:
         config = yaml.safe_load(f)
