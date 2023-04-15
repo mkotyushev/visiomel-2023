@@ -1,4 +1,5 @@
 import importlib
+import torch
 import yaml
 
 
@@ -33,8 +34,9 @@ def main():
 
     # Predict 
     predictions = []
-    for batch in test_dataloader:
-        predictions.extend(model(batch))
+    with torch.no_grad():
+        for batch in test_dataloader:
+            predictions.extend(model(batch))
 
     # Write predictions
     prediction_writer.write_on_epoch_end(None, None, predictions, None)
