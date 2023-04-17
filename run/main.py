@@ -1,3 +1,5 @@
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
 from pytorch_lightning.cli import LightningCLI
 
 
