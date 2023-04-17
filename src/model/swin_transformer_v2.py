@@ -109,11 +109,33 @@ class SwinTransformerV2Classifier(LightningModule):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
-
-    def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+    
+    def compute_loss(self, batch):
         x, y = batch
         x = self(x)
         loss = self.loss_fn(x, y)
+        return loss
+
+    def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        loss = self.compute_loss(batch)
+        self.log(
+            'train_loss', 
+            loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        return loss
+    
+    def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        loss = self.compute_loss(batch)
+        self.log(
+            'val_loss',
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+        )
         return loss
 
     def configure_optimizers(self) -> Optimizer:
