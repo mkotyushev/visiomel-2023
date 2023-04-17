@@ -45,7 +45,6 @@ model:
   init_args:
     model_name: swinv2_tiny_window8_256
     num_classes: 2
-    img_size: 512
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
@@ -53,7 +52,7 @@ data:
     k: 5
     fold_index: 0
     data_dir_test: null
-    image_size: 512
+    img_size: 512
     batch_size: 2
     split_seed: 0
     num_workers: 10

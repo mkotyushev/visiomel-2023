@@ -28,7 +28,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             k: int = 5,
             fold_index: int = 0,
             data_dir_test: Optional[str] = None,
-            image_size: int = 224,
+            img_size: int = 224,
             batch_size: int = 32,
             split_seed: int = 0,
             num_workers: int = 0,
@@ -45,16 +45,16 @@ class VisiomelTrainDatamodule(LightningDataModule):
         
         # data transformations
         self.train_transform = create_transform(
-            image_size, 
+            img_size, 
             is_training=True,
             auto_augment='rand-m9-mstd0.5'
         )
         self.val_transform = create_transform(
-            image_size, 
+            img_size, 
             is_training=False,
         )
         self.test_transform = create_transform(
-            image_size, 
+            img_size, 
             is_training=False,
         )
 
