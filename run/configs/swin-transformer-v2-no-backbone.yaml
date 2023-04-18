@@ -1,0 +1,9 @@
+model:
+  init_args:
+    patch_embed_backbone_name: null
+    patch_size: 4
+data:
+  init_args:
+    data_dir_train: /workspace/data/images_page_7/
+    img_size: 384
+    shrink_preview_scale: null

@@ -1,0 +1,7 @@
+trainer:
+  # Profiling
+  fast_dev_run: false
+  limit_train_batches: 100
+  limit_val_batches: 100
+  profiler: simple
+  detect_anomaly: false

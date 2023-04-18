@@ -30,13 +30,12 @@ trainer:
   benchmark: false
   enable_checkpointing: true
 
-  # Debugging
   fast_dev_run: false
   limit_train_batches: null
   limit_val_batches: null
   profiler: null
   detect_anomaly: false
-
+  
   min_epochs: null
   max_steps: -1
   min_steps: null
@@ -66,10 +65,8 @@ model:
   init_args:
     model_name: swinv2_base_window12to24_192to384_22kft1k
     num_classes: 2
-    # patch_embed_backbone_name: null
-    # patch_size: 4
-    patch_embed_backbone_name: resnet18
-    patch_size: 224
+    patch_embed_backbone_name: null
+    patch_size: 4
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
@@ -77,8 +74,7 @@ data:
     k: 5
     fold_index: 0
     data_dir_test: null
-    # img_size: 1024
-    img_size: 1792
+    img_size: 384
     shrink_preview_scale: 8
     batch_size: 2
     split_seed: 0
