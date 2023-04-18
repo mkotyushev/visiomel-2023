@@ -90,16 +90,16 @@ def build_classifier(
     # and then load the pretrained weights to the model via
     # load_pretrained function by Swin V2 authors
     pretrained_model = timm.create_model(
-        model_name, pretrained=True, num_classes=num_classes
+        model_name, pretrained=pretrained, num_classes=num_classes
     )
     if patch_embed_backbone_name is not None:
         patch_embed_backbone = timm.create_model(
-            patch_embed_backbone_name, pretrained=True, num_classes=0
+            patch_embed_backbone_name, pretrained=pretrained, num_classes=0
         )
         with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
             model = timm.create_model(
                 model_name, 
-                pretrained=pretrained, 
+                pretrained=False, 
                 num_classes=num_classes, 
                 img_size=img_size, 
                 patch_embed_backbone=patch_embed_backbone, 
@@ -108,7 +108,7 @@ def build_classifier(
     else:
         model = timm.create_model(
             model_name, 
-            pretrained=pretrained, 
+            pretrained=False, 
             num_classes=num_classes, 
             img_size=img_size, 
             patch_size=patch_size
