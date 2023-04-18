@@ -1,110 +1,142 @@
-import logging
 import timm
+import torch
+import torch.nn as nn
+from typing import Any, Dict, Optional
 from pytorch_lightning import LightningModule
 from torch import Tensor
-import torch
 from torch.nn import CrossEntropyLoss
 from torch.optim import Optimizer, AdamW
+from mock import patch
+from timm.models.swin_transformer_v2 import SwinTransformerV2
+
+from utils.utils import load_pretrained
+from model.patch_embed_with_backbone import PatchEmbedWithBackbone
 
 
-logger = logging.getLogger(__name__)
+class SwinTransformerV2WithBackbone(SwinTransformerV2):
+    r""" Swin Transformer V2
+        A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
+            - https://arxiv.org/abs/2111.09883
+    Args:
+        img_size (int | tuple(int)): Input image size. Default 224
+        patch_size (int | tuple(int)): Patch size. Default: 4
+        in_chans (int): Number of input image channels. Default: 3
+        num_classes (int): Number of classes for classification head. Default: 1000
+        embed_dim (int): Patch embedding dimension. Default: 96
+        depths (tuple(int)): Depth of each Swin Transformer layer.
+        num_heads (tuple(int)): Number of attention heads in different layers.
+        window_size (int): Window size. Default: 7
+        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4
+        qkv_bias (bool): If True, add a learnable bias to query, key, value. Default: True
+        drop_rate (float): Dropout rate. Default: 0
+        attn_drop_rate (float): Attention dropout rate. Default: 0
+        drop_path_rate (float): Stochastic depth rate. Default: 0.1
+        norm_layer (nn.Module): Normalization layer. Default: nn.LayerNorm.
+        ape (bool): If True, add absolute position embedding to the patch embedding. Default: False
+        patch_norm (bool): If True, add normalization after patch embedding. Default: True
+        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
+        pretrained_window_sizes (tuple(int)): Pretrained window sizes of each layer.
+    """
+
+    def __init__(
+            self, patch_embed_backbone: nn.Module,
+            img_size=224, patch_size=4, in_chans=3, num_classes=1000, global_pool='avg',
+            embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24),
+            window_size=7, mlp_ratio=4., qkv_bias=True,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+            norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
+            pretrained_window_sizes=(0, 0, 0, 0), **kwargs):
+        super().__init__(
+            img_size,
+            patch_size,
+            in_chans,
+            num_classes,
+            global_pool,
+            embed_dim,
+            depths,
+            num_heads,
+            window_size,
+            mlp_ratio,
+            qkv_bias,
+            drop_rate,
+            attn_drop_rate,
+            drop_path_rate,
+            norm_layer,
+            ape,
+            patch_norm,
+            pretrained_window_sizes,
+            **kwargs
+        )
+
+        self.patch_embed = PatchEmbedWithBackbone(
+            backbone=patch_embed_backbone,
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
+            norm_layer=norm_layer if self.patch_norm else None)
 
 
-# https://github.com/microsoft/Swin-Transformer/blob/f92123a0035930d89cf53fcb8257199481c4428d/utils.py
-def load_pretrained(state_dict, model):
-    # delete relative_position_index since we always re-init it
-    relative_position_index_keys = [k for k in state_dict.keys() if "relative_position_index" in k]
-    for k in relative_position_index_keys:
-        del state_dict[k]
+def build_classifier(
+    model_name, 
+    num_classes, 
+    img_size, 
+    patch_size, 
+    patch_embed_backbone_name=None
+):   
+    # Load pretrained model with its default img_size
+    # and then load the pretrained weights to the model via
+    # load_pretrained function by Swin V2 authors
+    pretrained_model = timm.create_model(
+        model_name, pretrained=True, num_classes=num_classes
+    )
+    if patch_embed_backbone_name is not None:
+        patch_embed_backbone = timm.create_model(
+            patch_embed_backbone_name, pretrained=True, num_classes=0
+        )
+        with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
+            model = timm.create_model(
+                model_name, 
+                pretrained=False, 
+                num_classes=num_classes, 
+                img_size=img_size, 
+                patch_embed_backbone=patch_embed_backbone, 
+                patch_size=patch_size
+            )
+    else:
+        model = timm.create_model(
+            model_name, 
+            pretrained=False, 
+            num_classes=num_classes, 
+            img_size=img_size, 
+            patch_size=patch_size
+        )
+    model = load_pretrained(pretrained_model.state_dict(), model)
 
-    # delete relative_coords_table since we always re-init it
-    relative_position_index_keys = [k for k in state_dict.keys() if "relative_coords_table" in k]
-    for k in relative_position_index_keys:
-        del state_dict[k]
-
-    # delete attn_mask since we always re-init it
-    attn_mask_keys = [k for k in state_dict.keys() if "attn_mask" in k]
-    for k in attn_mask_keys:
-        del state_dict[k]
-
-    # bicubic interpolate relative_position_bias_table if not match
-    relative_position_bias_table_keys = [k for k in state_dict.keys() if "relative_position_bias_table" in k]
-    for k in relative_position_bias_table_keys:
-        relative_position_bias_table_pretrained = state_dict[k]
-        relative_position_bias_table_current = model.state_dict()[k]
-        L1, nH1 = relative_position_bias_table_pretrained.size()
-        L2, nH2 = relative_position_bias_table_current.size()
-        if nH1 != nH2:
-            logger.warning(f"Error in loading {k}, passing......")
-        else:
-            if L1 != L2:
-                # bicubic interpolate relative_position_bias_table if not match
-                S1 = int(L1 ** 0.5)
-                S2 = int(L2 ** 0.5)
-                relative_position_bias_table_pretrained_resized = torch.nn.functional.interpolate(
-                    relative_position_bias_table_pretrained.permute(1, 0).view(1, nH1, S1, S1), size=(S2, S2),
-                    mode='bicubic')
-                state_dict[k] = relative_position_bias_table_pretrained_resized.view(nH2, L2).permute(1, 0)
-
-    # bicubic interpolate absolute_pos_embed if not match
-    absolute_pos_embed_keys = [k for k in state_dict.keys() if "absolute_pos_embed" in k]
-    for k in absolute_pos_embed_keys:
-        # dpe
-        absolute_pos_embed_pretrained = state_dict[k]
-        absolute_pos_embed_current = model.state_dict()[k]
-        _, L1, C1 = absolute_pos_embed_pretrained.size()
-        _, L2, C2 = absolute_pos_embed_current.size()
-        if C1 != C1:
-            logger.warning(f"Error in loading {k}, passing......")
-        else:
-            if L1 != L2:
-                S1 = int(L1 ** 0.5)
-                S2 = int(L2 ** 0.5)
-                absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.reshape(-1, S1, S1, C1)
-                absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.permute(0, 3, 1, 2)
-                absolute_pos_embed_pretrained_resized = torch.nn.functional.interpolate(
-                    absolute_pos_embed_pretrained, size=(S2, S2), mode='bicubic')
-                absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.permute(0, 2, 3, 1)
-                absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.flatten(1, 2)
-                state_dict[k] = absolute_pos_embed_pretrained_resized
-
-    # check classifier, if not match, then re-init classifier to zero
-    head_bias_pretrained = state_dict['head.bias']
-    Nc1 = head_bias_pretrained.shape[0]
-    Nc2 = model.head.bias.shape[0]
-    if (Nc1 != Nc2):
-        if Nc1 == 21841 and Nc2 == 1000:
-            logger.info("loading ImageNet-22K weight to ImageNet-1K ......")
-            map22kto1k_path = f'data/map22kto1k.txt'
-            with open(map22kto1k_path) as f:
-                map22kto1k = f.readlines()
-            map22kto1k = [int(id22k.strip()) for id22k in map22kto1k]
-            state_dict['head.weight'] = state_dict['head.weight'][map22kto1k, :]
-            state_dict['head.bias'] = state_dict['head.bias'][map22kto1k]
-        else:
-            torch.nn.init.constant_(model.head.bias, 0.)
-            torch.nn.init.constant_(model.head.weight, 0.)
-            del state_dict['head.weight']
-            del state_dict['head.bias']
-            logger.warning(f"Error in loading classifier head, re-init classifier head to 0")
-
-    msg = model.load_state_dict(state_dict, strict=False)
-    logger.warning(msg)
+    del pretrained_model
+    torch.cuda.empty_cache()
 
     return model
 
 
 class SwinTransformerV2Classifier(LightningModule):
-    def __init__(self, model_name: str, num_classes: int = 2, img_size = 224):
+    def __init__(
+        self, 
+        model_name: str, 
+        num_classes: int = 2, 
+        img_size = 224, 
+        patch_size: int = 4,
+        patch_embed_backbone_name: Optional[str] = None,
+        optimizer_init: Optional[Dict[str, Any]] = None,
+        lr_scheduler_init: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__()
+        self.save_hyperparameters()
         
-        # timm does not support image size different from pretrained model
-        pretrained_model = timm.create_model(model_name, pretrained=True, num_classes=num_classes)
-        self.model = timm.create_model(model_name, pretrained=False, num_classes=num_classes, img_size=img_size)
-        self.model = load_pretrained(pretrained_model.state_dict(), self.model)
-        del pretrained_model
-        torch.cuda.empty_cache()
-
+        self.model = build_classifier(
+            model_name, 
+            num_classes, 
+            patch_embed_backbone_name=patch_embed_backbone_name, 
+            img_size=img_size, 
+            patch_size=patch_size
+        )
         self.loss_fn = CrossEntropyLoss()
 
     def forward(self, x: Tensor) -> Tensor:
