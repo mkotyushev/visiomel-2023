@@ -2,12 +2,12 @@
 FROM nvidia/cuda:11.7.0-devel-ubuntu22.04
 
 # Set working directory
-WORKDIR /workspaces/visiomel-2023
+WORKDIR /workspace/visiomel-2023
 
 # Apt-get installs
 RUN \
     apt update && \
-    apt-get -y install git unzip wget tmux
+    apt-get -y install git unzip wget tmux curl libgl1
 
 # Install Miniconda
 RUN \
@@ -46,13 +46,12 @@ RUN /root/miniconda3/envs/visiomel-2023/bin/pip install \
     -r requirements.txt 
 
 # Add repo folder to PYTHONPATH
-ENV PYTHONPATH="/workspaces/visiomel-2023:${PYTHONPATH}"
-ARG PYTHONPATH="/workspaces/visiomel-2023:${PYTHONPATH}"
+ENV PYTHONPATH="/workspace/visiomel-2023:/workspace/visiomel-2023/src:${PYTHONPATH}"
+ARG PYTHONPATH="/workspace/visiomel-2023:/workspace/visiomel-2023/src:${PYTHONPATH}"
+ENV PATH="/workspace/visiomel-2023:/workspace/visiomel-2023/src:${PATH}"
+ARG PATH="/workspace/visiomel-2023:/workspace/visiomel-2023/src:${PATH}"
 
 # Install AWS CLI
-RUN \
-    apt update && \
-    apt-get -y install curl
 RUN \
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
