@@ -4,6 +4,7 @@ model:
     patch_size: 64
 data:
   init_args:
-    data_dir_train: /workspace/data/images_page_7/
+    data_dir_train: /workspace/data/images_page_4/
     img_size: 2048
     shrink_preview_scale: null
+    batch_size: 4
