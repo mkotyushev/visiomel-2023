@@ -74,6 +74,7 @@ data:
     fold_index: 0
     data_dir_test: null
     img_size: 1024
+    shrink_preview_scale: null
     batch_size: 2
     split_seed: 0
     num_workers: 10

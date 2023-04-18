@@ -3,7 +3,10 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
 from sklearn.model_selection import KFold
-from timm.data import create_transform
+from timm.data import rand_augment_transform
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+
+from src.data.transforms import Shrink, CenterCropPct
 
 
 class SubsetDataset(Dataset):
@@ -23,17 +26,18 @@ class SubsetDataset(Dataset):
 
 class VisiomelTrainDatamodule(LightningDataModule):
     def __init__(
-            self,
-            data_dir_train: str = './data/train',	
-            k: int = 5,
-            fold_index: int = 0,
-            data_dir_test: Optional[str] = None,
-            img_size: int = 224,
-            batch_size: int = 32,
-            split_seed: int = 0,
-            num_workers: int = 0,
-            pin_memory: bool = False
-        ):
+        self,
+        data_dir_train: str = './data/train',	
+        k: int = 5,
+        fold_index: int = 0,
+        data_dir_test: Optional[str] = None,
+        img_size: int = 224,
+        shrink_preview_scale: Optional[int] = None,
+        batch_size: int = 32,
+        split_seed: int = 0,
+        num_workers: int = 0,
+        pin_memory: bool = False
+    ):
         super().__init__()
         
         # this line allows to access init params with 'self.hparams' attribute
@@ -44,19 +48,28 @@ class VisiomelTrainDatamodule(LightningDataModule):
         assert 0 <= fold_index < k, "incorrect fold number"
         
         # data transformations
-        self.train_transform = create_transform(
-            img_size, 
-            is_training=True,
-            auto_augment='rand-m9-mstd0.5'
+        self.train_transform = Compose(
+            [
+                CenterCropPct(size=(0.9, 0.9)),
+                Shrink(scale=shrink_preview_scale),
+                Resize(size=(img_size, img_size)),
+                rand_augment_transform(config_str='rand-m9-mstd0.5'),
+                ToTensor(),
+                Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
+            ]
         )
-        self.val_transform = create_transform(
-            img_size, 
-            is_training=False,
+
+        non_train_transform = Compose(
+            [
+                CenterCropPct(size=(0.9, 0.9)),
+                Shrink(scale=shrink_preview_scale),
+                Resize(size=(img_size, img_size)),
+                ToTensor(),
+                Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
+            ]
         )
-        self.test_transform = create_transform(
-            img_size, 
-            is_training=False,
-        )
+        self.val_transform = non_train_transform
+        self.test_transform = non_train_transform
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
