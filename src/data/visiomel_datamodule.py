@@ -53,7 +53,10 @@ class VisiomelTrainDatamodule(LightningDataModule):
                 CenterCropPct(size=(0.9, 0.9)),
                 Shrink(scale=shrink_preview_scale),
                 Resize(size=(img_size, img_size)),
-                rand_augment_transform(config_str='rand-m9-mstd0.5'),
+                rand_augment_transform(
+                    config_str='rand-m9-mstd0.5',
+                    hparams=dict(img_mean=(238, 231, 234))  # from train data
+                ),
                 ToTensor(),
                 Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
             ]
