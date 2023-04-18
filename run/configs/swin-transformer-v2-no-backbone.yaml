@@ -5,6 +5,6 @@ model:
 data:
   init_args:
     data_dir_train: /workspace/data/images_page_7/
-    img_size: 256
+    img_size: 1024
     shrink_preview_scale: null
-    batch_size: 64
+    batch_size: 4
