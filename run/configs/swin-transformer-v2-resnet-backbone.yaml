@@ -1,9 +1,9 @@
 model:
   init_args:
     patch_embed_backbone_name: resnet18
-    patch_size: 224
+    patch_size: 64
 data:
   init_args:
-    data_dir_train: /workspace/data/images_page_4/
-    img_size: 1792
-    shrink_preview_scale: 8
+    data_dir_train: /workspace/data/images_page_7/
+    img_size: 2048
+    shrink_preview_scale: null

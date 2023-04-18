@@ -1,3 +1,4 @@
+import logging
 import timm
 import torch
 import torch.nn as nn
@@ -11,6 +12,9 @@ from timm.models.swin_transformer_v2 import SwinTransformerV2
 
 from utils.utils import load_pretrained
 from model.patch_embed_with_backbone import PatchEmbedWithBackbone
+
+
+logger = logging.getLogger(__name__)
 
 
 class SwinTransformerV2WithBackbone(SwinTransformerV2):
@@ -79,7 +83,8 @@ def build_classifier(
     num_classes, 
     img_size, 
     patch_size, 
-    patch_embed_backbone_name=None
+    patch_embed_backbone_name=None,
+    pretrained=True
 ):   
     # Load pretrained model with its default img_size
     # and then load the pretrained weights to the model via
@@ -94,7 +99,7 @@ def build_classifier(
         with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
             model = timm.create_model(
                 model_name, 
-                pretrained=False, 
+                pretrained=pretrained, 
                 num_classes=num_classes, 
                 img_size=img_size, 
                 patch_embed_backbone=patch_embed_backbone, 
@@ -103,7 +108,7 @@ def build_classifier(
     else:
         model = timm.create_model(
             model_name, 
-            pretrained=False, 
+            pretrained=pretrained, 
             num_classes=num_classes, 
             img_size=img_size, 
             patch_size=patch_size
@@ -126,16 +131,25 @@ class SwinTransformerV2Classifier(LightningModule):
         patch_embed_backbone_name: Optional[str] = None,
         optimizer_init: Optional[Dict[str, Any]] = None,
         lr_scheduler_init: Optional[Dict[str, Any]] = None,
+        pretrained: bool = True
     ):
         super().__init__()
         self.save_hyperparameters()
+
+        if pretrained and patch_size != 4:
+            logger.warning(
+                f'You are using pretrained model with patch_size={patch_size}. '
+                'Pretrained model is trained with patch_size=4. '
+                'This will result in resetting of lower layers of the model. '
+            )
         
         self.model = build_classifier(
             model_name, 
             num_classes, 
             patch_embed_backbone_name=patch_embed_backbone_name, 
             img_size=img_size, 
-            patch_size=patch_size
+            patch_size=patch_size,
+            pretrained=pretrained
         )
         self.loss_fn = CrossEntropyLoss()
 

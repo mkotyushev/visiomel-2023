@@ -63,8 +63,9 @@ ckpt_path: null
 model:
   class_path: src.model.swin_transformer_v2.SwinTransformerV2Classifier
   init_args:
-    model_name: swinv2_base_window12to24_192to384_22kft1k
+    model_name: swinv2_tiny_window16_256
     num_classes: 2
+    pretrained: true
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
