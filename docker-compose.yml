@@ -10,6 +10,8 @@ services:
     shm_size: '32gb'
     environment:
       - SSH_AUTH_SOCK:${SSH_AUTH_SOCK}
+    tmpfs:
+      - /workspace/data-tmpfs:size=16G
     volumes:
       - .:/workspace/visiomel-2023:cached
       - data:/workspace/data:cached
