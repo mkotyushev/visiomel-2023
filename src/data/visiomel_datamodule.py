@@ -106,6 +106,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory, 
+            prefetch_factor=2,
             shuffle=True
         )
 
@@ -115,6 +116,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
+            prefetch_factor=2,
             shuffle=False
         )
 
@@ -125,6 +127,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
+            prefetch_factor=2,
             shuffle=False
         )
 
