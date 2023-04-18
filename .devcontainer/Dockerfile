@@ -7,7 +7,7 @@ WORKDIR /workspace/visiomel-2023
 # Apt-get installs
 RUN \
     apt update && \
-    apt-get -y install git unzip wget tmux curl libgl1
+    apt-get -y install git unzip wget tmux curl libgl1 libglib2.0-0 openslide-tools
 
 # Install Miniconda
 RUN \
@@ -57,3 +57,7 @@ RUN \
     unzip awscliv2.zip && \
     ./aws/install && \
     rm -fr aws awscliv2.zip
+
+# Add TORCH_HOME for torch hub cache
+ENV TORCH_HOME="/workspace/data/.cache/torch"
+ARG TORCH_HOME="/workspace/data/.cache/torch"
