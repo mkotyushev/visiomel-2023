@@ -45,10 +45,12 @@ class VisiomelImageFolder(ImageFolder):
         if self.cache is None or path not in self.cache:
             sample = self.loader(path)
             if self.pre_transform is not None:
-                self.cache[path] = self.pre_transform(sample)
-            else:
+                sample = self.pre_transform(sample)
+            if self.cache is not None:
                 self.cache[path] = sample
-        return self.cache[path]
+        else:
+            sample = self.cache[path]
+        return sample
 
     def __getitem__(self, index: int):
         path, target = self.samples[index]
