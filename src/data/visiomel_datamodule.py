@@ -4,7 +4,7 @@ from typing import Optional
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from timm.data import rand_augment_transform
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
@@ -66,17 +66,16 @@ class VisiomelImageFolder(ImageFolder):
 
 def build_weighted_sampler(dataset):
     if isinstance(dataset, SubsetDataset):
-        samples = [
-            dataset.subset.dataset.samples[index] 
+        targets = [
+            dataset.subset.dataset.targets[index] 
             for index in dataset.subset.indices
         ]
     else:
-        samples = dataset.samples
+        targets = dataset.targets
     
-    target = [t for _, t in samples]
-    target_counter = Counter(target)
+    target_counter = Counter(targets)
     class_weights = {k: 1 / v for k, v in target_counter.items()}
-    weights = [class_weights[t] for _, t in samples]
+    weights = [class_weights[t] for t in targets]
 
     # num_samples is equal to the number of samples in the largest class
     # multiplied by the number of classes
@@ -156,8 +155,12 @@ class VisiomelTrainDatamodule(LightningDataModule):
                 loader=loader_with_filepath
             )
 
-            kfold = KFold(n_splits=self.hparams.k, shuffle=True, random_state=self.hparams.split_seed)
-            split = list(kfold.split(dataset))
+            kfold = StratifiedKFold(
+                n_splits=self.hparams.k, 
+                shuffle=True, 
+                random_state=self.hparams.split_seed
+            )
+            split = list(kfold.split(dataset, dataset.targets))
             train_indices, val_indices = split[self.hparams.fold_index]
 
             train_subset, val_subset = \
