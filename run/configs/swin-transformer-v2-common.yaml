@@ -9,10 +9,10 @@ trainer:
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
       init_args:
         logging_interval: step
-    - class_path: pytorch_lightning.callbacks.EarlyStopping
-      init_args:
-        monitor: val_f1
-        patience: 10
+    # - class_path: pytorch_lightning.callbacks.EarlyStopping
+    #   init_args:
+    #     monitor: val_f1
+    #     patience: 30
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
         monitor: val_f1
