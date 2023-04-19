@@ -1,5 +1,14 @@
+# Remove PIL image size limit
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
+
 import logging
 import torch
+from pytorch_lightning.cli import LightningCLI
+from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from torchvision.datasets.folder import default_loader
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -87,3 +96,42 @@ def load_pretrained(state_dict, model):
     logger.warning(msg)
 
     return model
+
+
+def loader_with_filepath(path):
+    """Load image and set filepath attribute."""
+    img = default_loader(path)
+    img.filepath = path
+    return img
+
+
+class TrainerWandb(Trainer):
+    """Hotfix for wandb logger saving config & artifacts to project root dir
+    and not in experiment dir."""
+    @property
+    def log_dir(self) -> Optional[str]:
+        """The directory for the current experiment. Use this to save images to, etc...
+
+        .. code-block:: python
+
+            def training_step(self, batch, batch_idx):
+                img = ...
+                save_img(img, self.trainer.log_dir)
+        """
+        if len(self.loggers) > 0:
+            if isinstance(self.loggers[0], WandbLogger):
+                dirpath = self.loggers[0]._experiment.dir
+            elif not isinstance(self.loggers[0], TensorBoardLogger):
+                dirpath = self.loggers[0].save_dir
+            else:
+                dirpath = self.loggers[0].log_dir
+        else:
+            dirpath = self.default_root_dir
+
+        dirpath = self.strategy.broadcast(dirpath)
+        return dirpath
+
+
+class MyLightningCLI(LightningCLI):
+    def add_arguments_to_parser(self, parser):
+        parser.link_arguments("data.init_args.img_size", "model.init_args.img_size")

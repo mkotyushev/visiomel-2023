@@ -74,4 +74,5 @@ data:
     data_dir_test: null
     split_seed: 0
     num_workers: 10
-    pin_memory: true
+    pin_memory: false
+    prefetch_factor: 2

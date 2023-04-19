@@ -1,3 +1,4 @@
+from multiprocessing import Manager
 from typing import Optional
 from torch.utils.data import Dataset, DataLoader, Subset
 from pytorch_lightning import LightningDataModule
@@ -7,6 +8,7 @@ from timm.data import rand_augment_transform
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
 from src.data.transforms import Shrink, CenterCropPct
+from src.utils.utils import loader_with_filepath
 
 
 class SubsetDataset(Dataset):
@@ -24,6 +26,40 @@ class SubsetDataset(Dataset):
         return len(self.subset)
 
 
+class VisiomelImageFolder(ImageFolder):
+    def __init__(
+        self, 
+        root: str, 
+        shared_cache=None, 
+        pre_transform=None, 
+        transform=None, 
+        target_transform=None, 
+        loader=None, 
+        is_valid_file=None
+    ):
+        super().__init__(root, transform, target_transform, loader, is_valid_file)
+        self.pre_transform = pre_transform
+        self.pre_transform_cache = shared_cache
+
+    def do_pre_transform(self, sample):
+        assert self.pre_transform is not None
+        if self.pre_transform_cache is None or sample.filepath not in self.pre_transform_cache:
+            self.pre_transform_cache[sample.filepath] = self.pre_transform(sample)
+        return self.pre_transform_cache[sample.filepath]
+
+    def __getitem__(self, index: int):
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.pre_transform is not None:
+            sample = self.do_pre_transform(sample)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return sample, target
+
+
 class VisiomelTrainDatamodule(LightningDataModule):
     def __init__(
         self,
@@ -36,7 +72,9 @@ class VisiomelTrainDatamodule(LightningDataModule):
         batch_size: int = 32,
         split_seed: int = 0,
         num_workers: int = 0,
-        pin_memory: bool = False
+        pin_memory: bool = False,
+        prefetch_factor: int = 2,
+        persistent_workers: bool = False,
     ):
         super().__init__()
         
@@ -48,11 +86,17 @@ class VisiomelTrainDatamodule(LightningDataModule):
         assert 0 <= fold_index < k, "incorrect fold number"
         
         # data transformations
-        self.train_transform = Compose(
+        manager = Manager()
+        self.shared_cache = manager.dict()
+        self.pre_transform = Compose(
             [
                 CenterCropPct(size=(0.9, 0.9)),
                 Shrink(scale=shrink_preview_scale),
                 Resize(size=(img_size, img_size)),
+            ]
+        )
+        self.train_transform = Compose(
+            [
                 rand_augment_transform(
                     config_str='rand-m9-mstd0.5',
                     hparams=dict(img_mean=(238, 231, 234))  # from train data
@@ -64,9 +108,6 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
         non_train_transform = Compose(
             [
-                CenterCropPct(size=(0.9, 0.9)),
-                Shrink(scale=shrink_preview_scale),
-                Resize(size=(img_size, img_size)),
                 ToTensor(),
                 Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
             ]
@@ -81,8 +122,13 @@ class VisiomelTrainDatamodule(LightningDataModule):
     def setup(self, stage=None) -> None:
         if self.train_dataset is None and self.val_dataset is None:
             # Train & val dataset as k-th fold
-            dataset = ImageFolder(
-                self.hparams.data_dir_train, transform=None)
+            dataset = VisiomelImageFolder(
+                self.hparams.data_dir_train, 
+                shared_cache=self.shared_cache,
+                pre_transform=self.pre_transform,
+                transform=None, 
+                loader=loader_with_filepath
+            )
 
             kfold = KFold(n_splits=self.hparams.k, shuffle=True, random_state=self.hparams.split_seed)
             split = list(kfold.split(dataset))
@@ -97,8 +143,13 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
         # Test dataset
         if self.test_dataset is None and self.hparams.data_dir_test is not None:
-            self.test_dataset = ImageFolder(
-                self.hparams.data_dir_test, transform=self.test_transform)
+            self.test_dataset = VisiomelImageFolder(
+                self.hparams.data_dir_test, 
+                shared_cache=None,
+                pre_transform=self.pre_transform,
+                transform=self.test_transform, 
+                loader=loader_with_filepath
+            )
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
@@ -106,7 +157,8 @@ class VisiomelTrainDatamodule(LightningDataModule):
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory, 
-            prefetch_factor=2,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
             shuffle=True
         )
 
@@ -116,7 +168,8 @@ class VisiomelTrainDatamodule(LightningDataModule):
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
-            prefetch_factor=2,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
             shuffle=False
         )
 
@@ -127,7 +180,8 @@ class VisiomelTrainDatamodule(LightningDataModule):
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
-            prefetch_factor=2,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
             shuffle=False
         )
 

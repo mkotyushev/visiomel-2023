@@ -1,15 +1,16 @@
-from typing import Optional
 import cv2
 import numpy as np
 import rpack
 import torchvision.transforms.functional as F
+from functools import cache
 from PIL import Image
 from histolab.filters.compositions import FiltersComposition
 from histolab.slide import Slide
 from torchvision.transforms import CenterCrop
+from typing import Optional
 
 
-def build_contours(mask):
+def build_contours_by_mask(mask):
   mask = mask[..., None].astype(np.uint8) * 255
 
   kernel_size = 3
@@ -20,7 +21,7 @@ def build_contours(mask):
   contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
   contours = sorted(map(cv2.boundingRect, contours))
 
-  return contours, mask
+  return contours
 
 
 def scale_contours(contours, x_max, y_max, contours_scale):
@@ -46,16 +47,31 @@ def scale_contours(contours, x_max, y_max, contours_scale):
   return contours_scaled
 
 
-def shrink_image(img, contours, contours_scale=None):
+def build_shink_size_and_positions(img, scale=None):
+  # Get preview image
+  if scale is None:
+      img_preview = img
+  else:
+      img_preview = img.resize(
+          (img.size[0] // scale, img.size[1] // scale)
+      )
+
+  # Get mask
+  composition = FiltersComposition(Slide)
+  mask = composition.tissue_mask_filters(img_preview)
+
+  # Build contours
+  contours = build_contours_by_mask(mask)
+
   # Here, scaling is rounded up
   # so scaled contour could exceed image size
   contours_scaled = contours
-  if contours_scale is not None:
+  if scale is not None:
     contours_scaled = scale_contours(
         contours, 
-        x_max=img.shape[1], 
-        y_max=img.shape[0], 
-        contours_scale=contours_scale
+        x_max=img.size[0], 
+        y_max=img.size[1], 
+        contours_scale=scale
     )
 
   sizes = [contour[-2:] for contour in contours_scaled]
@@ -63,6 +79,13 @@ def shrink_image(img, contours, contours_scale=None):
 
   x_max = max(x + w for (x, _), (w, _) in zip(positions, sizes))
   y_max = max(y + h for (_, y), (_, h) in zip(positions, sizes))
+
+  return sizes, positions, contours_scaled, x_max, y_max
+
+
+def shrink_image(img, sizes, scale=None):
+  sizes, positions, contours_scaled, x_max, y_max = sizes
+  img = np.array(img)
   if img.ndim == 2:
     new_img = np.zeros((y_max, x_max), dtype=img.dtype)
   else:
@@ -71,48 +94,16 @@ def shrink_image(img, contours, contours_scale=None):
   for (w, h), (x, y), (x_old, y_old, w_old, h_old) in zip(sizes, positions, contours_scaled):
     new_img[y: y + h, x: x + w] = img[y_old: y_old + h_old, x_old: x_old + w_old]
 
-  return new_img
-
-
-def scale_back(img, orig):
-  shape = orig.size[:2] if isinstance(orig, Image.Image) else orig.shape[:2][::-1]
-  img = cv2.resize(img, shape, fx=0, fy=0, interpolation = cv2.INTER_NEAREST)
-  return img
-
-
-def shrink_single(img, mask, scale=None):
-  contours, mask_contours = build_contours(mask)
-  mask_contours_scaled_back = mask_contours
-  if scale is not None:
-    mask_contours_scaled_back = scale_back(mask_contours, img)
-
-  mask_contours_scaled_back_shrinked = shrink_image(
-    mask_contours_scaled_back, contours, contours_scale=scale)
-  img_shrinked = shrink_image(img, contours, contours_scale=scale)
-
-  return img_shrinked, mask_contours_scaled_back_shrinked
+  return Image.fromarray(new_img)
 
 
 class Shrink:
     def __init__(self, scale: Optional[int] = None):
         self.scale = scale
-    
+
     def __call__(self, img: Image.Image) -> Image.Image:
-        # Get preview image
-        if self.scale is None:
-            img_preview = img
-        else:
-            img_preview = img.resize(
-               (img.size[0] // self.scale, img.size[1] // self.scale)
-            )
-
-        # Get mask
-        composition = FiltersComposition(Slide)
-        mask = composition.tissue_mask_filters(img_preview)
-
-        # Shrink image
-        img_shrinked, _ = shrink_single(np.array(img), mask, scale=self.scale)
-        img_shrinked = Image.fromarray(img_shrinked)
+        sizes = build_shink_size_and_positions(img, self.scale)
+        img_shrinked = shrink_image(img, sizes, self.scale)
 
         return img_shrinked
 
