@@ -2,13 +2,13 @@ import logging
 import timm
 import torch
 import torch.nn as nn
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from pytorch_lightning import LightningModule
 from torch import Tensor
 from torch.nn import CrossEntropyLoss
-from torch.optim import Optimizer, AdamW
 from mock import patch
 from timm.models.swin_transformer_v2 import SwinTransformerV2
+from pytorch_lightning.cli import instantiate_class
 
 from utils.utils import load_pretrained
 from model.patch_embed_with_backbone import PatchEmbedWithBackbone
@@ -131,6 +131,7 @@ class SwinTransformerV2Classifier(LightningModule):
         patch_embed_backbone_name: Optional[str] = None,
         optimizer_init: Optional[Dict[str, Any]] = None,
         lr_scheduler_init: Optional[Dict[str, Any]] = None,
+        pl_lrs_cfg: Optional[Dict[str, Any]] = None,
         pretrained: bool = True
     ):
         super().__init__()
@@ -184,5 +185,38 @@ class SwinTransformerV2Classifier(LightningModule):
         )
         return loss
 
-    def configure_optimizers(self) -> Optimizer:
-        return AdamW(self.parameters(), lr=1e-4)
+    def _init_param_groups(self) -> List[Dict]:
+        """Initialize the parameter groups. 
+        Returns:
+            List[Dict]: A list of parameter group dictionaries.
+        """
+        return [
+            p
+            for _, p in self.model.named_parameters()
+            if p.requires_grad
+        ]
+
+    def configure_optimizers(self):
+        optimizer = instantiate_class(args=self._init_param_groups(), init=self.hparams.optimizer_init)
+        if self.hparams.lr_scheduler_init is None:
+            return optimizer
+
+        # Convert milestones from total persents to steps
+        # for PiecewiceFactorsLRScheduler
+        if (
+            'PiecewiceFactorsLRScheduler' in self.hparams.lr_scheduler_init['class_path'] and
+            self.hparams.pl_lrs_cfg['interval'] == 'step'
+        ):
+            total_steps = len(self.trainer.fit_loop._data_source.dataloader()) * self.trainer.max_epochs
+            self.hparams.lr_scheduler_init['init_args']['milestones'] = [
+                int(milestone * total_steps) 
+                for milestone in self.hparams.lr_scheduler_init['init_args']['milestones']
+            ]
+        
+        scheduler = instantiate_class(args=optimizer, init=self.hparams.lr_scheduler_init)
+        scheduler = {
+            "scheduler": scheduler,
+            **self.hparams.pl_lrs_cfg,
+        }
+
+        return [optimizer], [scheduler]

@@ -21,7 +21,7 @@ trainer:
         save_last: true
 
   precision: 16-mixed
-  max_epochs: 400
+  max_epochs: 100
   check_val_every_n_epoch: 10
   log_every_n_steps: 50
   gradient_clip_val: 100
@@ -66,6 +66,28 @@ model:
     model_name: swinv2_tiny_window16_256
     num_classes: 2
     pretrained: true
+    optimizer_init: 
+      class_path: torch.optim.AdamW
+      init_args:
+        weight_decay: 1e-05
+        eps: 1e-07
+        lr: 1e-03
+    lr_scheduler_init:
+      class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
+      init_args:
+        milestones: [0, 0.1, 1.0]
+        pieces:
+          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+            init_args:
+              start_lr: 1e-2
+              stop_lr: 1
+          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+            init_args:
+              start_lr: 1
+              stop_lr: 1e-2
+    pl_lrs_cfg:
+      interval: step
+      frequency: 1
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
