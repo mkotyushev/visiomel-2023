@@ -13,8 +13,9 @@ from timm.models.swin_transformer_v2 import SwinTransformerV2
 from pytorch_lightning.cli import instantiate_class
 from torchmetrics import Metric
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score, BinaryAUROC
+from pytorch_lightning.utilities import grad_norm
 
-from utils.utils import load_pretrained
+from utils.utils import load_pretrained, state_norm
 from model.patch_embed_with_backbone import PatchEmbedWithBackbone
 
 
@@ -312,3 +313,19 @@ class SwinTransformerV2Classifier(LightningModule):
         scheduler = self.configure_lr_scheduler(optimizer)
 
         return [optimizer], [scheduler]
+
+    def on_before_optimizer_step(self, optimizer):
+        """Log gradient norms."""
+        # Compute the 2-norm for each layer
+        # If using mixed precision, the gradients are already unscaled here
+        norms = grad_norm(self, norm_type=2)
+        if self.log_norm_verbose:
+            self.log_dict(norms)
+        else:
+            self.log('grad_2.0_norm_total', norms['grad_2.0_norm_total'])
+
+        norms = state_norm(self, norm_type=2)
+        if self.log_norm_verbose:
+            self.log_dict(norms)
+        else:
+            self.log('state_2.0_norm_total', norms['state_2.0_norm_total'])
