@@ -1,7 +1,5 @@
 model:
   init_args:
-    finetuning:
-      unfreeze_after_epoch: 50
     lr_scheduler_init:
       class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
       init_args:
