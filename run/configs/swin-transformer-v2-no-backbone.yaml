@@ -8,3 +8,6 @@ data:
     img_size: 1024
     shrink_preview_scale: null
     batch_size: 4
+trainer:
+  max_epochs: 50
+  check_val_every_n_epoch: 1
