@@ -184,8 +184,7 @@ class SwinTransformerV2Classifier(LightningModule):
             patch_size=patch_size,
             pretrained=pretrained
         )
-
-        self.freeze_finetuning(True)
+        self.unfreeze_only_selected()
 
         self.loss_fn = CrossEntropyLoss()
         self.metrics = ModuleDict(
@@ -196,19 +195,29 @@ class SwinTransformerV2Classifier(LightningModule):
             }
         )
 
-    def freeze_finetuning(self, freeze: bool = True):
+    def unfreeze_only_selected(self):
         if self.hparams.finetuning is not None:
             for name, param in self.model.named_parameters():
-                if any(
-                    name.startswith(pattern) 
-                    for pattern in self.hparams.finetuning['freeze_layer_names_startswith']
-                ):
-                    param.requires_grad = freeze
+                selected = False
+
+                if 'unfreeze_layer_names_startswith' in self.hparams.finetuning:
+                    selected = selected or any(
+                        name.startswith(pattern) 
+                        for pattern in self.hparams.finetuning['unfreeze_layer_names_startswith']
+                    )
+
+                if 'unfreeze_layer_names_contains' in self.hparams.finetuning:
+                    selected = selected or any(
+                        pattern in name
+                        for pattern in self.hparams.finetuning['unfreeze_layer_names_contains']
+                    )
+
+                param.requires_grad = selected
 
     def on_train_epoch_end(self) -> None:
         if self.hparams.finetuning is not None:
             if self.current_epoch >= self.hparams.finetuning['unfreeze_after_epoch']:
-                self.freeze_finetuning(False)
+                self.unfreeze()
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)

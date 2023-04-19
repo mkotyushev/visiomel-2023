@@ -4,7 +4,7 @@ model:
     patch_size: 4
     finetuning:
       unfreeze_after_epoch: 10
-      freeze_layer_names_startswith:
+      unfreeze_layer_names_startswith:
         - model.head
 data:
   init_args:

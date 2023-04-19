@@ -3,10 +3,11 @@ model:
     patch_embed_backbone_name: resnet18
     patch_size: 96
     finetuning:
-      unfreeze_after_epoch: 10
-      freeze_layer_names_startswith:
-        - model.patch_embed.proj
-        - model.head
+      unfreeze_layer_names_startswith:
+        - patch_embed.proj.linear
+        - head
+      unfreeze_layer_names_contains:
+        - norm
 data:
   init_args:
     data_dir_train: /workspace/data/images_page_5/
