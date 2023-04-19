@@ -98,3 +98,4 @@ data:
     num_workers: 10
     pin_memory: false
     prefetch_factor: 2
+    sampler: weighted_upsampling

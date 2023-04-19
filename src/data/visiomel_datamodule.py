@@ -1,6 +1,7 @@
+from collections import Counter
 from multiprocessing import Manager
 from typing import Optional
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
 from sklearn.model_selection import KFold
@@ -63,6 +64,27 @@ class VisiomelImageFolder(ImageFolder):
         return sample, target
 
 
+def build_weighted_sampler(dataset):
+    if isinstance(dataset, SubsetDataset):
+        samples = [
+            dataset.subset.dataset.samples[index] 
+            for index in dataset.subset.indices
+        ]
+    else:
+        samples = dataset.samples
+    
+    target = [t for _, t in samples]
+    target_counter = Counter(target)
+    class_weights = {k: 1 / v for k, v in target_counter.items()}
+    weights = [class_weights[t] for _, t in samples]
+
+    # num_samples is equal to the number of samples in the largest class
+    # multiplied by the number of classes
+    num_samples = max(target_counter.values()) * len(target_counter)
+
+    return WeightedRandomSampler(weights=weights, num_samples=num_samples, replacement=True)
+        
+
 class VisiomelTrainDatamodule(LightningDataModule):
     def __init__(
         self,
@@ -78,6 +100,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         pin_memory: bool = False,
         prefetch_factor: int = 2,
         persistent_workers: bool = False,
+        sampler: Optional[str] = None,
     ):
         super().__init__()
         
@@ -155,6 +178,10 @@ class VisiomelTrainDatamodule(LightningDataModule):
             )
 
     def train_dataloader(self) -> DataLoader:
+        sampler, shuffle = None, True
+        if self.hparams.sampler is not None and self.hparams.sampler == 'weighted_upsampling':
+            sampler = build_weighted_sampler(self.train_dataset)
+            shuffle = False
         return DataLoader(
             dataset=self.train_dataset, 
             batch_size=self.hparams.batch_size, 
@@ -162,7 +189,8 @@ class VisiomelTrainDatamodule(LightningDataModule):
             pin_memory=self.hparams.pin_memory, 
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
-            shuffle=True
+            sampler=sampler,
+            shuffle=shuffle
         )
 
     def val_dataloader(self) -> DataLoader:
