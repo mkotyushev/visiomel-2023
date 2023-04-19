@@ -4,7 +4,9 @@ model:
     patch_size: 4
     finetuning:
       unfreeze_layer_names_startswith:
-        - model.head
+        - head
+      unfreeze_layer_names_contains:
+        - norm
 data:
   init_args:
     data_dir_train: /workspace/data/images_page_7/
