@@ -164,6 +164,7 @@ class SwinTransformerV2Classifier(LightningModule):
         pl_lrs_cfg: Optional[Dict[str, Any]] = None,
         pretrained: bool = True,
         finetuning: Optional[Dict[str, Any]] = None,
+        log_norm_verbose: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -319,13 +320,13 @@ class SwinTransformerV2Classifier(LightningModule):
         # Compute the 2-norm for each layer
         # If using mixed precision, the gradients are already unscaled here
         norms = grad_norm(self, norm_type=2)
-        if self.log_norm_verbose:
+        if self.hparams.log_norm_verbose:
             self.log_dict(norms)
         else:
             self.log('grad_2.0_norm_total', norms['grad_2.0_norm_total'])
 
         norms = state_norm(self, norm_type=2)
-        if self.log_norm_verbose:
+        if self.hparams.log_norm_verbose:
             self.log_dict(norms)
         else:
             self.log('state_2.0_norm_total', norms['state_2.0_norm_total'])
