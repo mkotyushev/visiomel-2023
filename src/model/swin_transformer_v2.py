@@ -161,7 +161,8 @@ class SwinTransformerV2Classifier(LightningModule):
         optimizer_init: Optional[Dict[str, Any]] = None,
         lr_scheduler_init: Optional[Dict[str, Any]] = None,
         pl_lrs_cfg: Optional[Dict[str, Any]] = None,
-        pretrained: bool = True
+        pretrained: bool = True,
+        finetuning: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -181,6 +182,9 @@ class SwinTransformerV2Classifier(LightningModule):
             patch_size=patch_size,
             pretrained=pretrained
         )
+
+        self.freeze_finetuning(True)
+
         self.loss_fn = CrossEntropyLoss()
         self.metrics = ModuleDict(
             {
@@ -189,6 +193,20 @@ class SwinTransformerV2Classifier(LightningModule):
                 'cross_entropy': CrossEntropyScore()
             }
         )
+
+    def freeze_finetuning(self, freeze: bool = True):
+        if self.hparams.finetuning is not None:
+            for name, param in self.model.named_parameters():
+                if any(
+                    name.startswith(pattern) 
+                    for pattern in self.hparams.finetuning['freeze_layer_names_startswith']
+                ):
+                    param.requires_grad = freeze
+
+    def on_train_epoch_end(self) -> None:
+        if self.hparams.finetuning is not None:
+            if self.current_epoch >= self.hparams.finetuning['unfreeze_after_epoch']:
+                self.freeze_finetuning(False)
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)

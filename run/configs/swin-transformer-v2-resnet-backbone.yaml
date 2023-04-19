@@ -2,6 +2,11 @@ model:
   init_args:
     patch_embed_backbone_name: resnet18
     patch_size: 96
+    finetuning:
+      unfreeze_after_epoch: 10
+      freeze_layer_names_startswith:
+        - model.patch_embed.proj
+        - model.head
 data:
   init_args:
     data_dir_train: /workspace/data/images_page_5/
@@ -9,3 +14,5 @@ data:
     shrink_preview_scale: 4
     batch_size: 4
     num_workers: 4
+trainer:
+  check_val_every_n_epoch: 1
