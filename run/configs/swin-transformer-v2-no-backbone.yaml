@@ -12,5 +12,3 @@ data:
     img_size: 256
     shrink_preview_scale: null
     batch_size: 64
-trainer:
-  check_val_every_n_epoch: 1

@@ -12,7 +12,5 @@ data:
     data_dir_train: /workspace/data/images_page_5/
     img_size: 3072
     shrink_preview_scale: 4
-    batch_size: 4
-    num_workers: 4
-trainer:
-  check_val_every_n_epoch: 1
+    batch_size: 6
+    num_workers: 6
