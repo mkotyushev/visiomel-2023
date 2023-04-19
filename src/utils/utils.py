@@ -3,12 +3,17 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
 import logging
+import timm
 import torch
+import torch.nn.functional as F
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from torchvision.datasets.folder import default_loader
 from typing import Dict, Optional, Union
+from model.patch_embed_with_backbone import SwinTransformerV2WithBackbone
+from torchmetrics import Metric
+from mock import patch
 
 
 logger = logging.getLogger(__name__)
@@ -168,3 +173,71 @@ def state_norm(module: torch.nn.Module, norm_type: Union[float, int, str], group
         total_norm = torch.tensor(list(norms.values())).norm(norm_type)
         norms[f"state_{norm_type}_norm_total"] = total_norm
     return norms
+
+
+def build_classifier(
+    model_name, 
+    num_classes, 
+    img_size, 
+    patch_size, 
+    patch_embed_backbone_name=None,
+    pretrained=True
+):   
+    # Load pretrained model with its default img_size
+    # and then load the pretrained weights to the model via
+    # load_pretrained function by Swin V2 authors
+    pretrained_model = timm.create_model(
+        model_name, pretrained=pretrained, num_classes=num_classes
+    )
+    if patch_embed_backbone_name is not None:
+        patch_embed_backbone = timm.create_model(
+            patch_embed_backbone_name, pretrained=pretrained, num_classes=0
+        )
+        with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
+            model = timm.create_model(
+                model_name, 
+                pretrained=False, 
+                num_classes=num_classes, 
+                img_size=img_size, 
+                patch_embed_backbone=patch_embed_backbone, 
+                patch_size=patch_size
+            )
+    else:
+        model = timm.create_model(
+            model_name, 
+            pretrained=False, 
+            num_classes=num_classes, 
+            img_size=img_size, 
+            patch_size=patch_size
+        )
+    model = load_pretrained(pretrained_model.state_dict(), model)
+
+    del pretrained_model
+    torch.cuda.empty_cache()
+
+    return model
+
+
+class CrossEntropyScore(Metric):
+    is_differentiable: Optional[bool] = None
+    higher_is_better: Optional[bool] = False
+    full_state_update: bool = False
+    def __init__(self):
+        super().__init__()
+        self.add_state("preds", default=[])
+        self.add_state("target", default=[])
+
+    def _input_format(self, preds: torch.Tensor, target: torch.Tensor):
+        return torch.stack((1 - preds, preds), dim=1), target
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        preds, target = self._input_format(preds, target)
+        assert preds.shape[0] == target.shape[0]
+
+        self.preds.append(preds)
+        self.target.append(target)
+
+    def compute(self):
+        self.preds = torch.cat(self.preds, dim=0)
+        self.target = torch.cat(self.target, dim=0)
+        return F.cross_entropy(self.preds, self.target).item()
