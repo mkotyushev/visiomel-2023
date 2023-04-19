@@ -1,15 +1,18 @@
 import logging
 import timm
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional
 from pytorch_lightning import LightningModule
 from torch import Tensor
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, ModuleDict
 from mock import patch
 from timm.models.swin_transformer_v2 import SwinTransformerV2
 from pytorch_lightning.cli import instantiate_class
+from torchmetrics import Metric
+from torchmetrics.classification import BinaryAccuracy, BinaryF1Score, BinaryAUROC
 
 from utils.utils import load_pretrained
 from model.patch_embed_with_backbone import PatchEmbedWithBackbone
@@ -122,6 +125,31 @@ def build_classifier(
     return model
 
 
+class CrossEntropyScore(Metric):
+    is_differentiable: Optional[bool] = None
+    higher_is_better: Optional[bool] = False
+    full_state_update: bool = False
+    def __init__(self):
+        super().__init__()
+        self.add_state("preds", default=[])
+        self.add_state("target", default=[])
+
+    def _input_format(self, preds: torch.Tensor, target: torch.Tensor):
+        return torch.stack((1 - preds, preds), dim=1), target
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        preds, target = self._input_format(preds, target)
+        assert preds.shape[0] == target.shape[0]
+
+        self.preds.append(preds)
+        self.target.append(target)
+
+    def compute(self):
+        self.preds = torch.cat(self.preds, dim=0)
+        self.target = torch.cat(self.target, dim=0)
+        return F.cross_entropy(self.preds, self.target).item()
+
+
 class SwinTransformerV2Classifier(LightningModule):
     def __init__(
         self, 
@@ -154,18 +182,25 @@ class SwinTransformerV2Classifier(LightningModule):
             pretrained=pretrained
         )
         self.loss_fn = CrossEntropyLoss()
+        self.metrics = ModuleDict(
+            {
+                'accuracy': BinaryAccuracy(),
+                'f1': BinaryF1Score(),
+                'cross_entropy': CrossEntropyScore()
+            }
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
     
-    def compute_loss(self, batch):
+    def compute_loss_preds(self, batch):
         x, y = batch
-        x = self(x)
-        loss = self.loss_fn(x, y)
-        return loss
+        preds = self(x)
+        loss = self.loss_fn(preds, y)
+        return loss, preds
 
     def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
-        loss = self.compute_loss(batch)
+        loss, _ = self.compute_loss_preds(batch)
         self.log(
             'train_loss', 
             loss,
@@ -176,15 +211,30 @@ class SwinTransformerV2Classifier(LightningModule):
         return loss
     
     def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
-        loss = self.compute_loss(batch)
+        loss, preds = self.compute_loss_preds(batch)
         self.log(
             'val_loss',
             loss,
             on_step=False,
             on_epoch=True,
-            prog_bar=True,
+            prog_bar=False,
         )
+        y, y_pred = batch[1], preds[:, 1]
+        for _, metric in self.metrics.items():
+            metric.update(y_pred, y)
         return loss
+
+    def on_validation_epoch_end(self) -> None:
+        for name, metric in self.metrics.items():
+            prog_bar = (name == 'cross_entropy')
+            self.log(
+                f'val_{name}',
+                metric.compute(),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=prog_bar,
+            )
+            metric.reset()
 
     def _init_param_groups(self) -> List[Dict]:
         """Initialize the parameter groups. 

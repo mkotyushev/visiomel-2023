@@ -11,11 +11,11 @@ trainer:
         logging_interval: step
     - class_path: pytorch_lightning.callbacks.EarlyStopping
       init_args:
-        monitor: val_loss
+        monitor: val_cross_entropy
         patience: 5    
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        monitor: val_loss
+        monitor: val_cross_entropy
         save_top_k: 5
         save_on_train_epoch_end: false
         save_last: true
