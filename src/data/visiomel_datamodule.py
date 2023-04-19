@@ -38,20 +38,21 @@ class VisiomelImageFolder(ImageFolder):
         is_valid_file=None
     ):
         super().__init__(root, transform, target_transform, loader, is_valid_file)
+        self.cache = shared_cache
         self.pre_transform = pre_transform
-        self.pre_transform_cache = shared_cache
 
-    def do_pre_transform(self, sample):
-        assert self.pre_transform is not None
-        if self.pre_transform_cache is None or sample.filepath not in self.pre_transform_cache:
-            self.pre_transform_cache[sample.filepath] = self.pre_transform(sample)
-        return self.pre_transform_cache[sample.filepath]
+    def load_cached(self, path):
+        if self.cache is None or path not in self.cache:
+            sample = self.loader(path)
+            if self.pre_transform is not None:
+                self.cache[path] = self.pre_transform(sample)
+            else:
+                self.cache[path] = sample
+        return self.cache[path]
 
     def __getitem__(self, index: int):
         path, target = self.samples[index]
-        sample = self.loader(path)
-        if self.pre_transform is not None:
-            sample = self.do_pre_transform(sample)
+        sample = self.load_cached(path)
         if self.transform is not None:
             sample = self.transform(sample)
         if self.target_transform is not None:
