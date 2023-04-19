@@ -2,6 +2,7 @@ import logging
 import timm
 import torch
 import torch.nn as nn
+from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional
 from pytorch_lightning import LightningModule
 from torch import Tensor
@@ -196,18 +197,32 @@ class SwinTransformerV2Classifier(LightningModule):
             if p.requires_grad
         ]
 
-    def configure_optimizers(self):
+    def configure_optimizer(self):
         optimizer = instantiate_class(args=self._init_param_groups(), init=self.hparams.optimizer_init)
-        if self.hparams.lr_scheduler_init is None:
-            return optimizer
+        return optimizer
 
+    def fts_callback(self):
+        for c in self.trainer.callbacks:
+            if isinstance(c, FinetuningScheduler):
+                return c
+        return None
+
+    def configure_lr_scheduler(self, optimizer):
         # Convert milestones from total persents to steps
         # for PiecewiceFactorsLRScheduler
         if (
             'PiecewiceFactorsLRScheduler' in self.hparams.lr_scheduler_init['class_path'] and
             self.hparams.pl_lrs_cfg['interval'] == 'step'
         ):
-            total_steps = len(self.trainer.fit_loop._data_source.dataloader()) * self.trainer.max_epochs
+            # max_epochs is number of epochs of current FTS stage
+            # if corresponding FTS callback is used
+            fts_callback = self.fts_callback()
+            if fts_callback is not None and 'max_transition_epoch' in fts_callback.ft_schedule[fts_callback.curr_depth]:
+                max_epochs = fts_callback.ft_schedule[self.curr_depth]['max_transition_epoch']
+            else:
+                max_epochs = self.trainer.max_epochs
+
+            total_steps = len(self.trainer.fit_loop._data_source.dataloader()) * max_epochs
             self.hparams.lr_scheduler_init['init_args']['milestones'] = [
                 int(milestone * total_steps) 
                 for milestone in self.hparams.lr_scheduler_init['init_args']['milestones']
@@ -218,5 +233,14 @@ class SwinTransformerV2Classifier(LightningModule):
             "scheduler": scheduler,
             **self.hparams.pl_lrs_cfg,
         }
+
+        return scheduler
+
+    def configure_optimizers(self):
+        optimizer = self.configure_optimizer()
+        if self.hparams.lr_scheduler_init is None:
+            return optimizer
+
+        scheduler = self.configure_lr_scheduler(optimizer)
 
         return [optimizer], [scheduler]
