@@ -63,6 +63,7 @@ ckpt_path: null
 model:
   class_path: src.model.swin_transformer_v2.SwinTransformerV2Classifier
   init_args:
+    log_norm_verbose: true
     model_name: swinv2_tiny_window16_256
     num_classes: 2
     pretrained: true
