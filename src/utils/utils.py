@@ -181,7 +181,8 @@ def build_classifier(
     img_size, 
     patch_size, 
     patch_embed_backbone_name=None,
-    pretrained=True
+    pretrained=True,
+    quadtree=False
 ):   
     # Load pretrained model with its default img_size
     # and then load the pretrained weights to the model via
@@ -200,7 +201,8 @@ def build_classifier(
                 num_classes=num_classes, 
                 img_size=img_size, 
                 patch_embed_backbone=patch_embed_backbone, 
-                patch_size=patch_size
+                patch_size=patch_size,
+                quadtree=quadtree,
             )
     else:
         model = timm.create_model(

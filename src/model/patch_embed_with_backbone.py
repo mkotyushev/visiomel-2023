@@ -1,8 +1,11 @@
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import PatchEmbed
 from timm.models.swin_transformer_v2 import SwinTransformerV2
+
+from model.quadtree_embedding import QuadtreeEmbedding
 
 
 class PatchBackbone(nn.Module):
@@ -47,6 +50,51 @@ class PatchBackbone(nn.Module):
         x = x.reshape(B, H_patches * W_patches, *x.shape[1:])
 
         return x
+    
+
+class PatchBackboneQuadtree(nn.Module):
+    """Apply backbone network to each patch selected by quadtree."""
+    def __init__(self, backbone, patch_size=16, embed_dim=768, splitter_hidden_size=64):
+        super().__init__()
+        self.embedding = QuadtreeEmbedding(
+            backbone, 
+            splitter_hidden_size=splitter_hidden_size, 
+            patch_size=patch_size
+        )
+        self.patch_size = patch_size
+        if backbone.num_features != embed_dim:
+            self.linear = nn.Linear(backbone.num_features, embed_dim)
+        else:
+            self.linear = nn.Identity()
+    
+    def forward(self, x):
+        B = x.shape[0]
+
+        # Apply embedding extractor object-wise
+        # (B, C, H, W) ->
+        # (B, backbone_emb_dim, H_patches, W_patches)
+        x = torch.cat(
+            [self.embedding(x[i].unsqueeze(0)) for i in range(B)],
+            0
+        )
+        H_patches, W_patches = x.shape[-2:]
+
+        # Swap dims 
+        # (B, backbone_emb_dim, H_patches, W_patches) ->
+        # (B, H_patches, W_patches, backbone_emb_dim)
+        x = x.permute(0, 2, 3, 1)
+
+        # Map to required embedding dimension
+        # (B, H_patches, W_patches, backbone_emb_dim) ->
+        # (B, H_patches, W_patches, emb_dim) ->
+        x = self.linear(x)
+
+        # Reshape back as expected from PatchEmbed
+        # (B, H_patches, W_patches, emb_dim) ->
+        # (B, H * W, emb_dim)
+        x = x.reshape(B, H_patches * W_patches, x.shape[-1])
+
+        return x
 
 
 class PatchEmbedWithBackbone(PatchEmbed):
@@ -57,7 +105,8 @@ class PatchEmbedWithBackbone(PatchEmbed):
     """
     def __init__(
         self,
-        backbone=None,
+        backbone,
+        quadtree=False,
         img_size=224,
         patch_size=16,
         in_chans=3,
@@ -75,8 +124,10 @@ class PatchEmbedWithBackbone(PatchEmbed):
             flatten=False,  # Already flattened by backbone
             bias=bias
         )
-        if backbone is not None:
+        if not quadtree:
             self.proj = PatchBackbone(backbone, patch_size, embed_dim)
+        else:
+            self.proj = PatchBackboneQuadtree(backbone, patch_size, embed_dim)
 
 
 class SwinTransformerV2WithBackbone(SwinTransformerV2):
@@ -105,7 +156,7 @@ class SwinTransformerV2WithBackbone(SwinTransformerV2):
     """
 
     def __init__(
-            self, patch_embed_backbone: nn.Module,
+            self, patch_embed_backbone: nn.Module, quadtree: bool = False,
             img_size=224, patch_size=4, in_chans=3, num_classes=1000, global_pool='avg',
             embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24),
             window_size=7, mlp_ratio=4., qkv_bias=True,
@@ -135,6 +186,6 @@ class SwinTransformerV2WithBackbone(SwinTransformerV2):
         )
 
         self.patch_embed = PatchEmbedWithBackbone(
-            backbone=patch_embed_backbone,
+            backbone=patch_embed_backbone, quadtree=quadtree,
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
             norm_layer=norm_layer if self.patch_norm else None)

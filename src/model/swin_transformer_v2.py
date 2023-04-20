@@ -28,6 +28,7 @@ class SwinTransformerV2Classifier(LightningModule):
         pretrained: bool = True,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
+        quadtree: bool = False
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -45,7 +46,8 @@ class SwinTransformerV2Classifier(LightningModule):
             patch_embed_backbone_name=patch_embed_backbone_name, 
             img_size=img_size, 
             patch_size=patch_size,
-            pretrained=pretrained
+            pretrained=pretrained,
+            quadtree=quadtree
         )
         self.unfreeze_only_selected()
 

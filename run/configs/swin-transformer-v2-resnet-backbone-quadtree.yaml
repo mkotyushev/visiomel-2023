@@ -1,0 +1,18 @@
+model:
+  init_args:
+    patch_embed_backbone_name: resnet18
+    patch_size: 64
+    quadtree: true
+    finetuning:
+      unfreeze_before_epoch: 50
+      unfreeze_layer_names_startswith:
+        - patch_embed.proj.embedding.splitter
+        - patch_embed.proj.linear
+        - head
+data:
+  init_args:
+    data_dir_train: /workspace/data/images_page_7/
+    img_size: 1024
+    shrink_preview_scale: null
+    batch_size: 6
+    num_workers: 6
