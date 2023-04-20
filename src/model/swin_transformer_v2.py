@@ -50,11 +50,24 @@ class SwinTransformerV2Classifier(LightningModule):
         self.unfreeze_only_selected()
 
         self.loss_fn = CrossEntropyLoss()
-        self.metrics = ModuleDict(
+        self.train_metrics = ModuleDict(
             {
-                'accuracy': BinaryAccuracy(),
+                'acc': BinaryAccuracy(),
                 'f1': BinaryF1Score(),
-                'cross_entropy': CrossEntropyScore()
+                'ce': CrossEntropyScore()
+            }
+        )
+        self.val_metrics = ModuleDict(
+            {
+                'acc': BinaryAccuracy(),
+                'f1': BinaryF1Score(),
+                'ce': CrossEntropyScore()
+            }
+        )
+        self.val_metrics_downsampled = ModuleDict(
+            {
+                'ds_acc': BinaryAccuracy(),
+                'ds_ce': CrossEntropyScore()
             }
         )
 
@@ -92,33 +105,60 @@ class SwinTransformerV2Classifier(LightningModule):
         return loss, preds
 
     def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
-        loss, _ = self.compute_loss_preds(batch)
+        loss, preds = self.compute_loss_preds(batch)
         self.log(
             'train_loss', 
             loss,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             prog_bar=True,
         )
-        return loss
-    
-    def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
-        loss, preds = self.compute_loss_preds(batch)
-        self.log(
-            'val_loss',
-            loss,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-        )
         y, y_pred = batch[1], preds[:, 1]
-        for _, metric in self.metrics.items():
+        for _, metric in self.train_metrics.items():
             metric.update(y_pred, y)
         return loss
+    
+    def validation_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None) -> Tensor:
+        # Here dataloader_idx == 0 corresponds to usual dataloader
+        # and dataloader_idx == 1 corresponds to dataloader with 
+        # val dataset with each class num samples downsampled to 
+        # minimal class size
+        loss, preds = self.compute_loss_preds(batch)
+        y, y_pred = batch[1], preds[:, 1]
+        if dataloader_idx == 0:
+            for _, metric in self.val_metrics.items():
+                metric.update(y_pred, y)
+        else:
+            for _, metric in self.val_metrics_downsampled.items():
+                metric.update(y_pred, y)
+        
+        return loss
 
+    def on_train_epoch_end(self) -> None:
+        for name, metric in self.train_metrics.items():
+            prog_bar = (name == 'f1' or name == 'ce')
+            self.log(
+                f'train_{name}',
+                metric.compute(),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=prog_bar,
+            )
+            metric.reset()
+    
     def on_validation_epoch_end(self) -> None:
-        for name, metric in self.metrics.items():
-            prog_bar = (name == 'cross_entropy')
+        for name, metric in self.val_metrics.items():
+            prog_bar = (name == 'f1')
+            self.log(
+                f'val_{name}',
+                metric.compute(),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=prog_bar,
+            )
+            metric.reset()
+        for name, metric in self.val_metrics_downsampled.items():
+            prog_bar = (name == 'ds_ce')
             self.log(
                 f'val_{name}',
                 metric.compute(),

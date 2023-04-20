@@ -1,4 +1,6 @@
-from collections import Counter
+import random
+from collections import Counter, defaultdict
+from copy import deepcopy
 from multiprocessing import Manager
 from typing import Optional
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
@@ -82,7 +84,31 @@ def build_weighted_sampler(dataset):
     num_samples = max(target_counter.values()) * len(target_counter)
 
     return WeightedRandomSampler(weights=weights, num_samples=num_samples, replacement=True)
-        
+
+
+def build_downsampled_dataset(subset_dataset: SubsetDataset):
+    # Here we need to copy the dataset to avoid changing 
+    # the original one while preserving underlying VisiomelImageFolder
+    # dataset to keep shared cache.
+    cached_dataset = subset_dataset.subset.dataset
+    subset_dataset = deepcopy(subset_dataset)
+    subset_dataset.subset.dataset = cached_dataset
+
+    # Get target to indices list mapping
+    target_to_indices = defaultdict(list)
+    for index in subset_dataset.subset.indices:
+        target = subset_dataset.subset.dataset.targets[index]
+        target_to_indices[target].append(index)
+
+    # Downsample each class to the minimum number of samples
+    min_target_num_samples = min(map(len, target_to_indices.values()))
+    for target in target_to_indices:
+        target_to_indices[target] = random.sample(target_to_indices[target], min_target_num_samples)
+    
+    # Update indices
+    subset_dataset.subset.indices = [index for indices in target_to_indices.values() for index in indices]
+    
+    return subset_dataset
 
 class VisiomelTrainDatamodule(LightningDataModule):
     def __init__(
@@ -142,6 +168,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
+        self.val_dataset_downsampled: Optional[Dataset] = None
         self.test_dataset: Optional[Dataset] = None
 
     def setup(self, stage=None) -> None:
@@ -169,6 +196,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             self.train_dataset, self.val_dataset = \
                 SubsetDataset(train_subset, transform=self.train_transform), \
                 SubsetDataset(val_subset, transform=self.val_transform)
+            self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
 
         # Test dataset
         if self.test_dataset is None and self.hparams.data_dir_test is not None:
@@ -197,7 +225,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(
+        val_dataloader = DataLoader(
             dataset=self.val_dataset, 
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
@@ -206,6 +234,16 @@ class VisiomelTrainDatamodule(LightningDataModule):
             persistent_workers=self.hparams.persistent_workers,
             shuffle=False
         )
+        val_dataloader_downsampled = DataLoader(
+            dataset=self.val_dataset_downsampled, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            shuffle=False
+        )
+        return [val_dataloader, val_dataloader_downsampled]
 
     def test_dataloader(self) -> DataLoader:
         assert self.test_dataset is not None, "test dataset is not defined"
