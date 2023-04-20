@@ -67,10 +67,9 @@ class QuadtreeClassifier(VisiomelModel):
             split_decision_logits.flatten(end_dim=-2), 
             random_split_decisions.flatten()
         )
-        loss_split_decision = loss_split_decision * torch.sign(
-            loss - loss_random_split
-        )
-        
+        apply_split_decision_loss = ((torch.sign(loss_random_split - loss) + 1) / 2).detach()
+        loss_split_decision = loss_split_decision * apply_split_decision_loss
+
         return loss + loss_split_decision, {
             'ce': loss, 
             'sd': loss_split_decision
