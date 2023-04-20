@@ -20,10 +20,10 @@ class QuadtreeEmbedding(nn.Module):
             nn.BatchNorm2d(splitter_hidden_size),
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(splitter_hidden_size, 1),
+            nn.Linear(splitter_hidden_size, 2),
         )
     
-    def __quadtree(self, patch, intra_level_index_history=None, level=0):
+    def __quadtree(self, patch, intra_level_index_history=None, level=0, random_split=False):
         # patch.shape == (1, C, H, W)
         
         if intra_level_index_history is None:
@@ -33,9 +33,14 @@ class QuadtreeEmbedding(nn.Module):
         assert size % self.patch_size == 0
 
         patch_preview = F.interpolate(patch, self.patch_size)
-        split_logit = self.splitter(patch_preview)
-        if size < self.patch_size * 2 or torch.less_equal(split_logit, 0.0):
-            yield intra_level_index_history, level, patch_preview
+        if random_split:
+            split_logit = need_split = ((torch.rand(1, device=patch.device) - 0.5) <= 0.0).long()
+        else:
+            split_logit = self.splitter(patch_preview)
+            need_split = torch.greater_equal(split_logit[:, 1], split_logit[:, 0])
+        
+        if size < self.patch_size * 2 or not need_split:
+            yield split_logit, intra_level_index_history, level, patch_preview
         else:
             sub_patches = \
                 patch[..., :patch.shape[-2] // 2, :patch.shape[-1] // 2], \
@@ -46,18 +51,19 @@ class QuadtreeEmbedding(nn.Module):
                 yield from self.__quadtree(
                     sub_patch, 
                     intra_level_index_history=intra_level_index_history + [i], 
-                    level=level + 1
+                    level=level + 1,
+                    random_split=random_split
                 )
         
-    def forward(self, x, output_patch_index_map=False):
+    def forward(self, x, output_split_logits=False, random_split=False):
         B, _, H, W = x.shape
         P = self.patch_size
         assert B == 1
         assert H == W, 'Currently only square images are supported'
 
         # Get quad-tree embeddings
-        history, levels, patches = \
-            list(zip(*self.__quadtree(x)))
+        split_logits, history, levels, patches = \
+            list(zip(*self.__quadtree(x, random_split=random_split)))
         embeddings_sparse = self.backbone(torch.cat(patches, 0))  # n_patches, emb_dim
         embeddings_sparse = embeddings_sparse.unsqueeze(-1).unsqueeze(-1)  # n_patches, emb_dim, 1, 1
 
@@ -70,17 +76,18 @@ class QuadtreeEmbedding(nn.Module):
             dtype=x.dtype,
             device=x.device
         )
-        if output_patch_index_map:
-            embeddings_dense_patch_index_map = torch.zeros(
+        if output_split_logits:
+            split_logits_map = torch.zeros(
                 B,
                 1, 
                 H // P, 
                 W // P, 
-                dtype=x.dtype,
+                split_logits[0].ndim,
+                dtype=split_logits[0].dtype,
                 device=x.device
             )
-        for i, (h, level) in enumerate(
-            zip(history, levels)
+        for i, (split_logit, h, level) in enumerate(
+            zip(split_logits, history, levels)
         ):            
             h_start, w_start = 0, 0
             for l, intra_level_index in enumerate(h):
@@ -109,14 +116,15 @@ class QuadtreeEmbedding(nn.Module):
             ] = \
                 embeddings_sparse[i, ...].expand(-1, h_size, -1).expand(-1, -1, w_size)
             
-            if output_patch_index_map:
-                embeddings_dense_patch_index_map[
+            if output_split_logits:
+                split_logits_map[
                     ..., 
                     h_start:h_start+h_size, 
-                    w_start:w_start+w_size
-                ] = i + 1
+                    w_start:w_start+w_size, 
+                    :
+                ] = split_logit
 
-        if output_patch_index_map:
-            return embeddings_dense, embeddings_dense_patch_index_map
+        if output_split_logits:
+            return embeddings_dense, split_logits_map
         else:
             return embeddings_dense

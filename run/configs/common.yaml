@@ -92,6 +92,8 @@ model:
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
+    data_dir_train: /workspace/data/images_page_7/
+    img_size: 1024
     k: 5
     fold_index: 0
     data_dir_test: null
@@ -100,3 +102,5 @@ data:
     pin_memory: false
     prefetch_factor: 2
     sampler: weighted_upsampling
+    shrink_preview_scale: null
+    batch_size: 8
