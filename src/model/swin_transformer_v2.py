@@ -113,7 +113,7 @@ class SwinTransformerV2Classifier(LightningModule):
             on_epoch=False,
             prog_bar=True,
         )
-        y, y_pred = batch[1], preds[:, 1]
+        y, y_pred = batch[1].detach(), preds[:, 1].detach()
         for _, metric in self.train_metrics.items():
             metric.update(y_pred, y)
         return loss
@@ -124,7 +124,7 @@ class SwinTransformerV2Classifier(LightningModule):
         # val dataset with each class num samples downsampled to 
         # minimal class size
         loss, preds = self.compute_loss_preds(batch)
-        y, y_pred = batch[1], preds[:, 1]
+        y, y_pred = batch[1].detach(), preds[:, 1].detach()
         if dataloader_idx == 0:
             for _, metric in self.val_metrics.items():
                 metric.update(y_pred, y)
