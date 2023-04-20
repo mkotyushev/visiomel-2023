@@ -102,8 +102,11 @@ class Shrink:
         self.scale = scale
 
     def __call__(self, img: Image.Image) -> Image.Image:
-        sizes = build_shink_size_and_positions(img, self.scale)
-        img_shrinked = shrink_image(img, sizes, self.scale)
+        try:
+          sizes = build_shink_size_and_positions(img, self.scale)
+          img_shrinked = shrink_image(img, sizes, self.scale)
+        except ValueError as e:
+          img_shrinked = img
 
         return img_shrinked
 
