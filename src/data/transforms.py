@@ -98,6 +98,16 @@ def shrink_image(img, sizes, scale=None):
 
 
 class Shrink:
+    shrink_problem_filenames = [
+        '1vig9enh.png', '24xxi0a4.png', '3f4c0t1d.png', '61wseljn.png', '6235nfns.png', 
+        '6gt1vaty.png', '7nyiq3xw.png', '8f7dpkpv.png', '8j2n6c96.png', '8pkdid6b.png', 
+        '9d9fv6qj.png', '9dp3he0s.png', '9r67fy7w.png', 'aw75mfil.png', 'ba9kpgk3.png', 
+        'dzuwx6cz.png', 'evlwfw6j.png', 'f54rwukl.png', 'g64ajigb.png', 'hi63pfrb.png', 
+        'hxiubwtq.png', 'i5h28l20.png', 'l6s043vm.png', 'ltwbgd9g.png', 'mut49okk.png', 
+        'mwr9rmlg.png', 'onxdf2fq.png', 'oxk5y262.png', 'peesbo3q.png', 'pkfqj0ga.png', 
+        'qrimite8.png', 'rdslu5i5.png', 'rr4gq7zb.png', 's4cm9bva.png', 'uuggf1s7.png', 
+        'vif6zvk6.png', 'z9o9gqia.png'
+    ]
     def __init__(self, scale: Optional[int] = None):
         self.scale = scale
 

@@ -35,6 +35,8 @@ class VisiomelImageFolder(ImageFolder):
         root: str, 
         shared_cache=None, 
         pre_transform=None, 
+        pre_transform_exclude=None, 
+        pre_transform_for_excluded=None, 
         transform=None, 
         target_transform=None, 
         loader=None, 
@@ -43,12 +45,16 @@ class VisiomelImageFolder(ImageFolder):
         super().__init__(root, transform, target_transform, loader, is_valid_file)
         self.cache = shared_cache
         self.pre_transform = pre_transform
+        self.pre_transform_exclude = pre_transform_exclude or []
+        self.pre_transform_for_excluded = pre_transform_for_excluded
 
     def load_cached(self, path):
         if self.cache is None or path not in self.cache:
             sample = self.loader(path)
-            if self.pre_transform is not None:
+            if self.pre_transform is not None and path not in self.pre_transform_exclude:
                 sample = self.pre_transform(sample)
+            elif self.pre_transform_for_excluded is not None and path in self.pre_transform_exclude:
+                sample = self.pre_transform_for_excluded(sample)
             if self.cache is not None:
                 self.cache[path] = sample
         else:
@@ -146,6 +152,8 @@ class VisiomelTrainDatamodule(LightningDataModule):
                 Resize(size=(img_size, img_size)),
             ]
         )
+        self.pre_transform_for_excluded = Resize(size=(img_size, img_size))
+        self.pre_transform_exclude = Shrink.shrink_problem_filenames
         self.train_transform = Compose(
             [
                 rand_augment_transform(
@@ -178,6 +186,8 @@ class VisiomelTrainDatamodule(LightningDataModule):
                 self.hparams.data_dir_train, 
                 shared_cache=self.shared_cache,
                 pre_transform=self.pre_transform,
+                pre_transform_for_excluded=self.pre_transform_for_excluded,
+                pre_transform_exclude=self.pre_transform_exclude,
                 transform=None, 
                 loader=loader_with_filepath
             )
