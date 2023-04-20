@@ -69,10 +69,8 @@ class VisiomelModel(LightningModule):
         if self.hparams.finetuning is not None:
             if self.current_epoch >= self.hparams.finetuning['unfreeze_before_epoch']:
                 self.unfreeze()
-
-    def on_train_start(self):
-        """Initialize the model."""
-        self.unfreeze_only_selected()
+            else:
+                self.unfreeze_only_selected()
 
     def unfreeze_only_selected(self):
         """
@@ -80,7 +78,7 @@ class VisiomelModel(LightningModule):
         model.finetuning.unfreeze_layer_names_*.
         """
         if self.hparams.finetuning is not None:
-            for name, param in self.model.named_parameters():
+            for name, param in self.named_parameters():
                 selected = False
 
                 if 'unfreeze_layer_names_startswith' in self.hparams.finetuning:
