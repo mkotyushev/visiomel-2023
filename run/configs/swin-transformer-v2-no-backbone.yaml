@@ -3,7 +3,7 @@ model:
     patch_embed_backbone_name: null
     patch_size: 4
     finetuning:
-      unfreeze_after_epoch: 50
+      unfreeze_before_epoch: 50
       unfreeze_layer_names_startswith:
         - head
 data:

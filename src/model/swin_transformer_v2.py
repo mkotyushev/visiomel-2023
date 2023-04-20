@@ -90,9 +90,9 @@ class SwinTransformerV2Classifier(LightningModule):
 
                 param.requires_grad = selected
 
-    def on_train_epoch_end(self) -> None:
+    def on_train_epoch_start(self) -> None:
         if self.hparams.finetuning is not None:
-            if self.current_epoch >= self.hparams.finetuning['unfreeze_after_epoch']:
+            if self.current_epoch >= self.hparams.finetuning['unfreeze_before_epoch']:
                 self.unfreeze()
 
     def forward(self, x: Tensor) -> Tensor:

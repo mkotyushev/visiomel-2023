@@ -3,7 +3,7 @@ model:
     patch_embed_backbone_name: resnet18
     patch_size: 96
     finetuning:
-      unfreeze_after_epoch: 50
+      unfreeze_before_epoch: 50
       unfreeze_layer_names_startswith:
         - patch_embed.proj.linear
         - head
