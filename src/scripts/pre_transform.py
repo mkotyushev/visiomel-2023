@@ -17,12 +17,10 @@ parser.add_argument('--input-dir', type=Path, help='Path to data folder')
 parser.add_argument('--output-dir', type=Path, help='Path to output folder')
 args = parser.parse_args()
 
-img_size = 512
 pre_transform = Compose(
     [
         CenterCropPct(size=(0.9, 0.9)),
         Shrink(scale=None),
-        Resize(size=(img_size, img_size)),
     ]
 )
 
