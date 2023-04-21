@@ -105,10 +105,13 @@ def build_downsampled_dataset(subset_dataset: SubsetDataset):
     # Downsample each class to the minimum number of samples
     min_target_num_samples = min(map(len, target_to_indices.values()))
     for target in target_to_indices:
-        target_to_indices[target] = random.sample(target_to_indices[target], min_target_num_samples)
+        if len(target_to_indices[target]) > min_target_num_samples:
+            target_to_indices[target] = random.sample(target_to_indices[target], min_target_num_samples)
     
     # Update indices
-    subset_dataset.subset.indices = [index for indices in target_to_indices.values() for index in indices]
+    subset_dataset.subset.indices = []
+    for indices in target_to_indices.values():
+        subset_dataset.subset.indices.extend(indices)
     
     return subset_dataset
 
