@@ -1,3 +1,9 @@
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format = '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s'
+)
+
 from src.utils.utils import MyLightningCLI, TrainerWandb
 
 
