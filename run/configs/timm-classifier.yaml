@@ -2,10 +2,9 @@ model:
   class_path: src.model.timm_classifier.TimmClassifier
   init_args:
     backbone_name: resnet50
-    finetuning:
-      unfreeze_before_epoch: 0
-      unfreeze_layer_names_startswith:
-        - model.classifier.head
+    num_classes: 2
+    pretrained: true
+    lr_layer_decay: 0.9
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
