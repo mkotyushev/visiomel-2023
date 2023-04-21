@@ -1,3 +1,4 @@
+import logging
 from pytorch_lightning import LightningModule
 from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional
@@ -8,6 +9,9 @@ from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 from pytorch_lightning.utilities import grad_norm
 
 from utils.utils import state_norm, CrossEntropyScore
+
+
+logger = logging.getLogger(__name__)
 
 
 class VisiomelModel(LightningModule):
@@ -67,10 +71,9 @@ class VisiomelModel(LightningModule):
         """Called in the training loop at the very beginning of the epoch."""
         # Unfreeze all layers if freeze period is over
         if self.hparams.finetuning is not None:
-            if self.current_epoch >= self.hparams.finetuning['unfreeze_before_epoch']:
+            # TODO change to >= somehow
+            if self.current_epoch == self.hparams.finetuning['unfreeze_before_epoch']:
                 self.unfreeze()
-            else:
-                self.unfreeze_only_selected()
 
     def unfreeze_only_selected(self):
         """
@@ -92,7 +95,7 @@ class VisiomelModel(LightningModule):
                         pattern in name
                         for pattern in self.hparams.finetuning['unfreeze_layer_names_contains']
                     )
-
+                logger.info(f'Param {name}\'s requires_grad == {selected}.')
                 param.requires_grad = selected
 
     def training_step(self, batch, batch_idx, **kwargs):
@@ -157,19 +160,8 @@ class VisiomelModel(LightningModule):
             )
             metric.reset()
 
-    def _init_param_groups(self) -> List[Dict]:
-        """Initialize the parameter groups. 
-        Returns:
-            List[Dict]: A list of parameter group dictionaries.
-        """
-        return [
-            p
-            for _, p in self.named_parameters()
-            if p.requires_grad
-        ]
-
     def configure_optimizer(self):
-        optimizer = instantiate_class(args=self._init_param_groups(), init=self.hparams.optimizer_init)
+        optimizer = instantiate_class(args=self.parameters(), init=self.hparams.optimizer_init)
         return optimizer
 
     def fts_callback(self):

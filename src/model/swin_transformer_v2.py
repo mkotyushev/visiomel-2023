@@ -56,6 +56,10 @@ class SwinTransformerV2Classifier(VisiomelModel):
 
         self.loss_fn = CrossEntropyLoss()
 
+        # TODO: called in each VisiomelModel subclass but after subclass __init__
+        # need to move to VisiomelModel somehow
+        self.unfreeze_only_selected()
+
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
     

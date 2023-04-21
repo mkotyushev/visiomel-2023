@@ -33,6 +33,10 @@ class QuadtreeClassifier(VisiomelModel):
         )
         self.classifier = nn.Linear(backbone.num_features, num_classes)
 
+        # TODO: called in each VisiomelModel subclass but after subclass __init__
+        # need to move to VisiomelModel somehow
+        self.unfreeze_only_selected()
+
     def forward(self, x, random_split=False):
         preds, split_decision_logits = [], []
         for i in range(x.shape[0]):
