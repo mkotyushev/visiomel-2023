@@ -14,6 +14,7 @@ from typing import Dict, Optional, Union
 from model.patch_embed_with_backbone import SwinTransformerV2WithBackbone
 from torchmetrics import Metric
 from mock import patch
+from sklearn.metrics import log_loss
 
 
 logger = logging.getLogger(__name__)
@@ -224,7 +225,7 @@ def build_classifier(
     return model
 
 
-class CrossEntropyScore(Metric):
+class LogLossScore(Metric):
     is_differentiable: Optional[bool] = None
     higher_is_better: Optional[bool] = False
     full_state_update: bool = False
@@ -246,4 +247,4 @@ class CrossEntropyScore(Metric):
     def compute(self):
         self.preds = torch.cat(self.preds, dim=0)
         self.target = torch.cat(self.target, dim=0)
-        return F.cross_entropy(self.preds, self.target).item()
+        return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy()[:, 1], eps=1e-16).item()

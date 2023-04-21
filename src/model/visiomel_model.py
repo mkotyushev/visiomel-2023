@@ -8,7 +8,7 @@ from pytorch_lightning.cli import instantiate_class
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 from pytorch_lightning.utilities import grad_norm
 
-from utils.utils import state_norm, CrossEntropyScore
+from utils.utils import state_norm, LogLossScore
 
 
 logger = logging.getLogger(__name__)
@@ -30,20 +30,20 @@ class VisiomelModel(LightningModule):
             {
                 'acc': BinaryAccuracy(),
                 'f1': BinaryF1Score(),
-                'ce': CrossEntropyScore()
+                'll': LogLossScore()
             }
         )
         self.val_metrics = ModuleDict(
             {
                 'acc': BinaryAccuracy(),
                 'f1': BinaryF1Score(),
-                'ce': CrossEntropyScore()
+                'll': LogLossScore()
             }
         )
         self.val_metrics_downsampled = ModuleDict(
             {
                 'ds_acc': BinaryAccuracy(),
-                'ds_ce': CrossEntropyScore()
+                'ds_ll': LogLossScore()
             }
         )
 
