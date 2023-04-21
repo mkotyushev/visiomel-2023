@@ -3,11 +3,12 @@
 # 3. Read output data folder path downscale factor from CLI arg
 # 3. For each image in data folder downscale it by downscale factor and save it to output data folder
 # Usage example: 
-# python src/utils/downscale.py --input-dir /workspace/data/images_page_7/ --output-dir /workspace/data/images_page_6/ --downscale-factor 2
+# python src/scripts/pre_transform.py --input-dir /workspace/data/images_page_4/ --output-dir /workspace/data/images_page_4_shink/ --scale 8
 
 import argparse
 from pathlib import Path
 from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
 from tqdm import tqdm
 from src.data.transforms import CenterCropPct, Shrink
 from torchvision.transforms import Compose, Resize

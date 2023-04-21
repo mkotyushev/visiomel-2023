@@ -3,7 +3,7 @@
 # 3. Read output data folder path downscale factor from CLI arg
 # 3. For each image in data folder downscale it by downscale factor and save it to output data folder
 # Usage example: 
-# python src/utils/downscale.py --input-dir /workspace/data/images_page_7/ --output-dir /workspace/data/images_page_6/ --downscale-factor 2
+# python src/scripts/downscale.py --input-dir /workspace/data/images_page_7/ --output-dir /workspace/data/images_page_6/ --downscale-factor 2
 
 import argparse
 import gc

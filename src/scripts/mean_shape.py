@@ -1,7 +1,7 @@
 # 1. Read data folder path from CLI arg
 # 2. Print mean of each dimention of shape of images in data folder
 # Usage example: 
-# python src/utils/mean_shape.py --input-dir /workspace/data/images_page_7/
+# python src/scripts/mean_shape.py --input-dir /workspace/data/images_page_7/
 
 import argparse
 import numpy as np

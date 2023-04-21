@@ -3,7 +3,7 @@
 # 3. Create a subfolder in data folder for each class in metadata 'relapse' column
 # 4. Move all images from data folder to the corresponding class subfolder
 # Usage example: 
-# python src/utils/split_by_classes.py --data /workspace/data/images_page_7/ --labels /workspace/data/train_labels.csv
+# python src/scripts/split_by_classes.py --data /workspace/data/images_page_7/ --labels /workspace/data/train_labels.csv
 
 import argparse
 import os
