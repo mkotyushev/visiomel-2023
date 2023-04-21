@@ -1,16 +1,40 @@
 model:
   init_args:
-    patch_embed_backbone_name: resnet18
-    patch_size: 96
-    finetuning:
-      unfreeze_before_epoch: 50
-      unfreeze_layer_names_startswith:
-        - patch_embed.proj.linear
-        - head
+    patch_embed_backbone_name: resnet50
+    model_name: swinv2_tiny_window8_256
+    pretrained: false
+    patch_size: 224
+    optimizer_init: 
+      class_path: torch.optim.AdamW
+      init_args:
+        weight_decay: 0.01
+        eps: 1e-08
+        lr: 1e-4
+    lr_scheduler_init:
+      class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
+      init_args:
+        milestones: [0, 0.2, 1.0]
+        pieces:
+          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+            init_args:
+              start_lr: 1e-2
+              stop_lr: 1
+          - class_path: src.utils.lr_scheduler.CosineLRSchedulerPiece
+            init_args:
+              start_lr: 1
+              stop_lr: 1e-2
+    pl_lrs_cfg:
+      interval: step
+      frequency: 1
+    lr_layer_decay:
+      model.patch_embed.proj.backbone: 1e-2
+    finetuning: null
 data:
   init_args:
-    data_dir_train: /workspace/data/images_page_5/
-    img_size: 3072
-    shrink_preview_scale: 4
-    batch_size: 6
-    num_workers: 6
+    data_dir_train: /workspace/data/images_page_4_shrink/
+    img_size: 3584
+    data_shrinked: true
+    shrink_preview_scale: null
+    batch_size: 2
+    num_workers: 3
+    enable_caching: false
