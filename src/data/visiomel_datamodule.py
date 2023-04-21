@@ -132,6 +132,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
         enable_caching: bool = False,
+        data_shrinked: bool = False,
     ):
         super().__init__()
         
@@ -147,13 +148,16 @@ class VisiomelTrainDatamodule(LightningDataModule):
         if enable_caching:
             manager = Manager()
             self.shared_cache = manager.dict()
-        self.pre_transform = Compose(
-            [
-                CenterCropPct(size=(0.9, 0.9)),
-                Shrink(scale=shrink_preview_scale),
-                Resize(size=(img_size, img_size)),
-            ]
-        )
+        if data_shrinked:
+            self.pre_transform = Resize(size=(img_size, img_size))
+        else:
+            self.pre_transform = Compose(
+                [
+                    CenterCropPct(size=(0.9, 0.9)),
+                    Shrink(scale=shrink_preview_scale),
+                    Resize(size=(img_size, img_size)),
+                ]
+            )
         self.train_transform = Compose(
             [
                 rand_augment_transform(
