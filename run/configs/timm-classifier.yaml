@@ -39,6 +39,6 @@ data:
   init_args:
     data_dir_train: /workspace/data/images_page_5/
     img_size: 2048
-    num_workers: 4
+    num_workers: 10
     shrink_preview_scale: 4
     batch_size: 4
