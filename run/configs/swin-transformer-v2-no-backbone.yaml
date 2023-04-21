@@ -3,12 +3,13 @@ model:
     patch_embed_backbone_name: null
     patch_size: 4
     finetuning:
-      unfreeze_before_epoch: 50
+      unfreeze_before_epoch: 0
       unfreeze_layer_names_startswith:
-        - head
+        - model.head
 data:
   init_args:
-    data_dir_train: /workspace/data/images_page_7/
+    data_dir_train: /workspace/data/images_page_6/
     img_size: 1024
-    shrink_preview_scale: null
-    batch_size: 8
+    shrink_preview_scale: 2
+    batch_size: 4
+    enable_caching: true
