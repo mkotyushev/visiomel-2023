@@ -126,6 +126,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         prefetch_factor: int = 2,
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
+        enable_caching: bool = False,
     ):
         super().__init__()
         
@@ -137,8 +138,10 @@ class VisiomelTrainDatamodule(LightningDataModule):
         assert 0 <= fold_index < k, "incorrect fold number"
         
         # data transformations
-        manager = Manager()
-        self.shared_cache = manager.dict()
+        self.shared_cache = None
+        if enable_caching:
+            manager = Manager()
+            self.shared_cache = manager.dict()
         self.pre_transform = Compose(
             [
                 CenterCropPct(size=(0.9, 0.9)),
