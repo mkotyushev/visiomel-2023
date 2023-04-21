@@ -161,10 +161,10 @@ class VisiomelModel(LightningModule):
 
     def get_lr_decayed(self, lr, layer_index):
         """Get lr decayed by layer index."""
-        if self.hparams.optimizer_init.lr_decay == 1.0:
+        if self.hparams.lr_layer_decay == 1.0:
             return lr
         else:
-            return lr * (self.hparams.optimizer_init.lr_decay ** layer_index)
+            return lr * (self.hparams.lr_layer_decay ** layer_index)
 
     def build_parameter_groups(self):
         """Get parameter groups for optimizer."""
@@ -173,7 +173,7 @@ class VisiomelModel(LightningModule):
         grouped_parameters = [
             {
                 'params': p, 
-                'lr': self.get_lr_decayed(self.hparams.optimizer_init.lr, num_layers - layer_index - 1)
+                'lr': self.get_lr_decayed(self.hparams.optimizer_init['init_args']['lr'], num_layers - layer_index - 1)
             } for layer_index, p in enumerate(params)
         ]
         logger.info(
