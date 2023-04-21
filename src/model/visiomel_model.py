@@ -1,7 +1,7 @@
 import logging
 from pytorch_lightning import LightningModule
 from finetuning_scheduler import FinetuningScheduler
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
 from torch.nn import ModuleDict
 from pytorch_lightning.cli import instantiate_class
@@ -22,7 +22,7 @@ class VisiomelModel(LightningModule):
         pl_lrs_cfg: Optional[Dict[str, Any]] = None,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
-        lr_layer_decay: float = 1.0,
+        lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -161,12 +161,27 @@ class VisiomelModel(LightningModule):
             )
             metric.reset()
 
-    def get_lr_decayed(self, lr, layer_index):
-        """Get lr decayed by layer index."""
-        if self.hparams.lr_layer_decay == 1.0:
+    def get_lr_decayed(self, lr, layer_index, layer_name):
+        """
+        Get lr decayed by 
+            - layer index as (self.hparams.lr_layer_decay ** layer_index) if
+              self.hparams.lr_layer_decay is float 
+              (useful e. g. when new parameters are in classifer head)
+            - layer name as self.hparams.lr_layer_decay[layer_name] if
+              self.hparams.lr_layer_decay is dict
+              (useful e. g. when pretrained parameters are at few start layers 
+              and new parameters are the most part of the model)
+        """
+        if isinstance(self.hparams.lr_layer_decay, dict):
+            for key in self.hparams.lr_layer_decay:
+                if layer_name.startswith(key):
+                    return lr * self.hparams.lr_layer_decay[key]
             return lr
-        else:
-            return lr * (self.hparams.lr_layer_decay ** layer_index)
+        elif isinstance(self.hparams.lr_layer_decay, float):
+            if self.hparams.lr_layer_decay == 1.0:
+                return lr
+            else:
+                return lr * (self.hparams.lr_layer_decay ** layer_index)
 
     def build_parameter_groups(self):
         """Get parameter groups for optimizer."""
@@ -174,9 +189,13 @@ class VisiomelModel(LightningModule):
         num_layers = len(params)
         grouped_parameters = [
             {
-                'params': p, 
-                'lr': self.get_lr_decayed(self.hparams.optimizer_init['init_args']['lr'], num_layers - layer_index - 1)
-            } for layer_index, p in enumerate(params)
+                'params': param, 
+                'lr': self.get_lr_decayed(
+                    self.hparams.optimizer_init['init_args']['lr'], 
+                    num_layers - layer_index - 1,
+                    name
+                )
+            } for layer_index, (name, param) in enumerate(self.named_parameters())
         ]
         logger.info(
             f'Number of layers: {num_layers}, '
