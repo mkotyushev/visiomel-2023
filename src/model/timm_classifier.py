@@ -1,5 +1,6 @@
 import timm
 import torch
+import torch.nn as nn
 from typing import Any, Dict, Optional
 
 from src.model.visiomel_model import VisiomelModel
@@ -29,13 +30,14 @@ class TimmClassifier(VisiomelModel):
         self.save_hyperparameters()
 
         self.classifier = timm.create_model(backbone_name, pretrained=pretrained, num_classes=num_classes)
+        self.loss_fn = nn.CrossEntropyLoss()
 
         # TODO: called in each VisiomelModel subclass but after subclass __init__
         # need to move to VisiomelModel somehow
         self.unfreeze_only_selected()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+        return self.classifier(x)
     
     def compute_loss_preds(self, batch, *args, **kwargs):
         x, y = batch
