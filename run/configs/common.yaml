@@ -80,12 +80,12 @@ model:
         pieces:
           - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
             init_args:
-              start_lr: 2e-8
-              stop_lr: 2e-5
+              start_lr: 5e-4
+              stop_lr: 0.5
           - class_path: src.utils.lr_scheduler.CosineLRSchedulerPiece
             init_args:
-              start_lr: 2e-5
-              stop_lr: 2e-7
+              start_lr: 0.5
+              stop_lr: 5e-3
     pl_lrs_cfg:
       interval: step
       frequency: 1
