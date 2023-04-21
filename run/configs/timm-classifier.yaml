@@ -1,3 +1,5 @@
+# trainer:
+#   max_epochs: 100
 model:
   class_path: src.model.timm_classifier.TimmClassifier
   init_args:
@@ -9,7 +11,7 @@ model:
       init_args:
         weight_decay: 0.01
         eps: 1e-08
-        lr: 1e-3
+        lr: 1e-4
     lr_scheduler_init:
       class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
       init_args:
@@ -28,11 +30,15 @@ model:
       frequency: 1
     lr_layer_decay: 0.99
     finetuning: null
+    # finetuning:
+    #   unfreeze_before_epoch: 10
+    #   unfreeze_layer_names_startswith:
+    #     - model.classifier.head
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
-    data_dir_train: /workspace/data/images_page_7/
-    img_size: 1024
-    num_workers: 10
-    shrink_preview_scale: null
-    batch_size: 16
+    data_dir_train: /workspace/data/images_page_5/
+    img_size: 2048
+    num_workers: 4
+    shrink_preview_scale: 4
+    batch_size: 4
