@@ -1,5 +1,6 @@
 model:
   init_args:
+    model_name: swinv2_base_window12to24_192to384_22kft1k
     patch_embed_backbone_name: null
     patch_size: 4
     finetuning:
@@ -8,8 +9,8 @@ model:
         - model.head
 data:
   init_args:
-    data_dir_train: /workspace/data/images_page_6/
-    img_size: 1024
-    shrink_preview_scale: 2
-    batch_size: 4
+    data_dir_train: /workspace/data/images_page_7/
+    img_size: 768
+    shrink_preview_scale: null
+    batch_size: 2
     enable_caching: true
