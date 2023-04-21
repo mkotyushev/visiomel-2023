@@ -192,7 +192,7 @@ def build_classifier(
     )
     if patch_embed_backbone_name is not None:
         patch_embed_backbone = timm.create_model(
-            patch_embed_backbone_name, pretrained=pretrained, num_classes=0
+            patch_embed_backbone_name, pretrained=True, num_classes=0
         )
         with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
             model = timm.create_model(
