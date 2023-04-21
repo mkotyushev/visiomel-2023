@@ -82,7 +82,7 @@ model:
             init_args:
               start_lr: 2e-8
               stop_lr: 2e-5
-          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+          - class_path: src.utils.lr_scheduler.CosineLRSchedulerPiece
             init_args:
               start_lr: 2e-5
               stop_lr: 2e-7
