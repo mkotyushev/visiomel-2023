@@ -24,6 +24,7 @@ class VisiomelModel(LightningModule):
         pretrained: bool = True,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
+        lr_layer_decay: float = 1.0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -160,8 +161,31 @@ class VisiomelModel(LightningModule):
             )
             metric.reset()
 
+    def get_lr_decayed(self, lr, layer_index):
+        """Get lr decayed by layer index."""
+        if self.hparams.optimizer_init.lr_decay == 1.0:
+            return lr
+        else:
+            return lr * (self.hparams.optimizer_init.lr_decay ** layer_index)
+
+    def build_parameter_groups(self):
+        """Get parameter groups for optimizer."""
+        num_layers = len(list(self.parameters()))
+        grouped_parameters = [
+            {
+                'params': p, 
+                'lr': self.get_lr_decayed(self.hparams.optimizer_init.lr, num_layers - layer_index - 1)
+            } for layer_index, p in self.parameters()
+        ]
+        logger.info(
+            f'Number of layers: {num_layers}, '
+            f'min lr: {grouped_parameters[0]["lr"]}, '
+            f'max lr: {grouped_parameters[-1]["lr"]}'
+        )
+        return grouped_parameters
+
     def configure_optimizer(self):
-        optimizer = instantiate_class(args=self.parameters(), init=self.hparams.optimizer_init)
+        optimizer = instantiate_class(args=self.build_parameter_groups(), init=self.hparams.optimizer_init)
         return optimizer
 
     def fts_callback(self):
