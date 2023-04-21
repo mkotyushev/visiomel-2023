@@ -103,3 +103,4 @@ data:
     sampler: weighted_upsampling
     shrink_preview_scale: null
     batch_size: 8
+    enable_caching: true
