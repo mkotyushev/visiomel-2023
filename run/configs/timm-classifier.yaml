@@ -4,7 +4,30 @@ model:
     backbone_name: resnet50
     num_classes: 2
     pretrained: true
-    lr_layer_decay: 0.9
+    optimizer_init: 
+      class_path: torch.optim.AdamW
+      init_args:
+        weight_decay: 0.01
+        eps: 1e-08
+        lr: 1e-3
+    lr_scheduler_init:
+      class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
+      init_args:
+        milestones: [0, 0.2, 1.0]
+        pieces:
+          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+            init_args:
+              start_lr: 1e-2
+              stop_lr: 1
+          - class_path: src.utils.lr_scheduler.CosineLRSchedulerPiece
+            init_args:
+              start_lr: 1
+              stop_lr: 1e-2
+    pl_lrs_cfg:
+      interval: step
+      frequency: 1
+    lr_layer_decay: 0.99
+    finetuning: null
 data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
   init_args:
@@ -12,4 +35,4 @@ data:
     img_size: 1024
     num_workers: 10
     shrink_preview_scale: null
-    batch_size: 32
+    batch_size: 16
