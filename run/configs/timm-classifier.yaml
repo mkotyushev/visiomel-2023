@@ -1,0 +1,16 @@
+model:
+  class_path: src.model.timm_classifier.TimmClassifier
+  init_args:
+    backbone_name: resnet50
+    finetuning:
+      unfreeze_before_epoch: 0
+      unfreeze_layer_names_startswith:
+        - model.classifier.head
+data:
+  class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
+  init_args:
+    data_dir_train: /workspace/data/images_page_7/
+    img_size: 1024
+    num_workers: 10
+    shrink_preview_scale: null
+    batch_size: 32
