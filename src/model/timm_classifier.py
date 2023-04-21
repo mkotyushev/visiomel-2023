@@ -18,6 +18,7 @@ class TimmClassifier(VisiomelModel):
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        grad_checkpointing: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -30,6 +31,7 @@ class TimmClassifier(VisiomelModel):
         self.save_hyperparameters()
 
         self.classifier = timm.create_model(backbone_name, pretrained=pretrained, num_classes=num_classes)
+        self.classifier.set_grad_checkpointing(grad_checkpointing)
         self.loss_fn = nn.CrossEntropyLoss()
 
         # TODO: called in each VisiomelModel subclass but after subclass __init__

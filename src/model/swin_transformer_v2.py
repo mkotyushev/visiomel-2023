@@ -26,6 +26,7 @@ class SwinTransformerV2Classifier(VisiomelModel):
         log_norm_verbose: bool = False,
         quadtree: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        grad_checkpointing: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -51,7 +52,8 @@ class SwinTransformerV2Classifier(VisiomelModel):
             img_size=img_size, 
             patch_size=patch_size,
             pretrained=pretrained,
-            quadtree=quadtree
+            quadtree=quadtree,
+            grad_checkpointing=grad_checkpointing,
         )
 
         self.loss_fn = CrossEntropyLoss()

@@ -182,7 +182,8 @@ def build_classifier(
     patch_size, 
     patch_embed_backbone_name=None,
     pretrained=True,
-    quadtree=False
+    quadtree=False,
+    grad_checkpointing=False,
 ):   
     # Load pretrained model with its default img_size
     # and then load the pretrained weights to the model via
@@ -194,6 +195,8 @@ def build_classifier(
         patch_embed_backbone = timm.create_model(
             patch_embed_backbone_name, pretrained=True, num_classes=0
         )
+        patch_embed_backbone.set_grad_checkpointing(grad_checkpointing)
+
         with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
             model = timm.create_model(
                 model_name, 
@@ -213,6 +216,7 @@ def build_classifier(
             patch_size=patch_size
         )
     model = load_pretrained(pretrained_model.state_dict(), model)
+    model.set_grad_checkpointing(grad_checkpointing)
 
     del pretrained_model
     torch.cuda.empty_cache()
