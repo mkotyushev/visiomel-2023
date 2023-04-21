@@ -1,4 +1,5 @@
 import random
+import torch
 from collections import Counter, defaultdict
 from copy import deepcopy
 from multiprocessing import Manager
@@ -9,6 +10,7 @@ from torchvision.datasets import ImageFolder
 from sklearn.model_selection import StratifiedKFold
 from timm.data import rand_augment_transform
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 from src.data.transforms import Shrink, CenterCropPct
 from src.utils.utils import loader_with_filepath
@@ -156,14 +158,14 @@ class VisiomelTrainDatamodule(LightningDataModule):
                     hparams=dict(img_mean=(238, 231, 234))  # from train data
                 ),
                 ToTensor(),
-                Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD))
             ]
         )
 
         non_train_transform = Compose(
             [
                 ToTensor(),
-                Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD))
             ]
         )
         self.val_transform = non_train_transform
