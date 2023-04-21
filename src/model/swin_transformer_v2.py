@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from torch import Tensor
 from torch.nn import CrossEntropyLoss
 
@@ -25,7 +25,7 @@ class SwinTransformerV2Classifier(VisiomelModel):
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         quadtree: bool = False,
-        lr_layer_decay: float = 1.0,
+        lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 

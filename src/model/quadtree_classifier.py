@@ -2,7 +2,7 @@ import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from src.model.visiomel_model import VisiomelModel
 from src.model.quadtree_embedding import QuadtreeEmbedding
@@ -21,7 +21,7 @@ class QuadtreeClassifier(VisiomelModel):
         pretrained: bool = True,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
-        lr_layer_decay: float = 1.0,
+        lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
