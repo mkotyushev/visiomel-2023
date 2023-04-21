@@ -170,17 +170,18 @@ class VisiomelModel(LightningModule):
 
     def build_parameter_groups(self):
         """Get parameter groups for optimizer."""
-        num_layers = len(list(self.parameters()))
+        names, params = list(zip(*self.named_parameters()))
+        num_layers = len(params)
         grouped_parameters = [
             {
                 'params': p, 
                 'lr': self.get_lr_decayed(self.hparams.optimizer_init.lr, num_layers - layer_index - 1)
-            } for layer_index, p in self.parameters()
+            } for layer_index, p in enumerate(params)
         ]
         logger.info(
             f'Number of layers: {num_layers}, '
-            f'min lr: {grouped_parameters[0]["lr"]}, '
-            f'max lr: {grouped_parameters[-1]["lr"]}'
+            f'min lr: {names[0]}, {grouped_parameters[0]["lr"]}, '
+            f'max lr: {names[-1]}, {grouped_parameters[-1]["lr"]}'
         )
         return grouped_parameters
 
