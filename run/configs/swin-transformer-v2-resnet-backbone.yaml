@@ -1,3 +1,5 @@
+trainer:
+  max_epochs: 50
 model:
   init_args:
     grad_checkpointing: true
@@ -10,11 +12,11 @@ model:
       init_args:
         weight_decay: 0.01
         eps: 1e-08
-        lr: 1e-4
+        lr: 1e-3
     lr_scheduler_init:
       class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
       init_args:
-        milestones: [0, 0.2, 1.0]
+        milestones: [0, 0.05, 1.0]
         pieces:
           - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
             init_args:
