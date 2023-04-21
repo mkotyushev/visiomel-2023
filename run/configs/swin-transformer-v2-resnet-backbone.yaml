@@ -1,5 +1,6 @@
 trainer:
   max_epochs: 50
+  check_val_every_n_epoch: 3
 model:
   init_args:
     grad_checkpointing: true
