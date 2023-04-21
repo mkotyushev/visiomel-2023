@@ -15,16 +15,25 @@ from torchvision.transforms import Compose, Resize
 parser = argparse.ArgumentParser()
 parser.add_argument('--input-dir', type=Path, help='Path to data folder')
 parser.add_argument('--output-dir', type=Path, help='Path to output folder')
+parser.add_argument('--scale', type=int, help='Preview scale for shrink transform')
+parser.add_argument('--img-size', type=int, default=None, help='Resize to that size (squared) as last transform')
 args = parser.parse_args()
 
-img_size = 512
-pre_transform = Compose(
-    [
-        CenterCropPct(size=(0.9, 0.9)),
-        Shrink(scale=None),
-        Resize(size=(img_size, img_size)),
-    ]
-)
+if args.img_size is None:
+    pre_transform = Compose(
+        [
+            CenterCropPct(size=(0.9, 0.9)),
+            Shrink(scale=args.scale),
+        ]
+    )
+else:
+    pre_transform = Compose(
+        [
+            CenterCropPct(size=(0.9, 0.9)),
+            Shrink(scale=args.scale),
+            Resize(size=(args.img_size, args.img_size)),
+        ]
+    )
 
 # Read data image by image, pre-transform it and save it to output directory
 filepaths = sorted(list(args.input_dir.glob('**/*.png')))
