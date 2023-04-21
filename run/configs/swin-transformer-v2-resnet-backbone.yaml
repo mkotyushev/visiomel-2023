@@ -1,6 +1,7 @@
 model:
   init_args:
-    patch_embed_backbone_name: resnet50
+    grad_checkpointing: true
+    patch_embed_backbone_name: resnet18
     model_name: swinv2_tiny_window8_256
     pretrained: false
     patch_size: 224
@@ -35,6 +36,6 @@ data:
     img_size: 3584
     data_shrinked: true
     shrink_preview_scale: null
-    batch_size: 2
+    batch_size: 8
     num_workers: 3
     enable_caching: false
