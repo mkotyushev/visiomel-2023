@@ -41,4 +41,4 @@ data:
     img_size: 2048
     num_workers: 10
     shrink_preview_scale: 4
-    batch_size: 4
+    batch_size: 6
