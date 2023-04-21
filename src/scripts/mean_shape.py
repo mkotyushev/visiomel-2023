@@ -24,8 +24,12 @@ for filepath in tqdm(filepaths):
 
 # Calcualte mean for each dimention
 shapes = np.array(shapes)
-print(shapes.mean(0))
+print('Mean: ', shapes.mean(0))
+print('Min: ', shapes.min(0))
+print('Max: ', shapes.max(0))
+print('Median: ', np.quantile(shapes, 0.5, 0))
 
+# Mean:
 # 7: [ 836.26304024 1027.62816692]
 # 4: [6690.60432191 8221.96870343]
 # 7_shrink: [613.59463487 654.74217586]
