@@ -17,11 +17,9 @@ logger = logging.getLogger(__name__)
 class VisiomelModel(LightningModule):
     def __init__(
         self, 
-        num_classes: int = 2, 
         optimizer_init: Optional[Dict[str, Any]] = None,
         lr_scheduler_init: Optional[Dict[str, Any]] = None,
         pl_lrs_cfg: Optional[Dict[str, Any]] = None,
-        pretrained: bool = True,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: float = 1.0,
