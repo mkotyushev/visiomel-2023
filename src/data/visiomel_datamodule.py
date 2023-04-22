@@ -193,6 +193,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
         if self.hparams.data_shrinked:
             self.pre_transform = resize_transform_pre_transform
+            img_mean = (193, 187, 205)  # from train data shrinked
         else:
             self.pre_transform = Compose(
                 [
@@ -201,13 +202,14 @@ class VisiomelTrainDatamodule(LightningDataModule):
                     resize_transform_pre_transform,
                 ]
             )
+            img_mean = (238, 231, 234)  # from all train data
 
         self.train_transform = Compose(
             [
                 resize_transform_train,
                 rand_augment_transform(
                     config_str='rand-m9-mstd0.5',
-                    hparams=dict(img_mean=(238, 231, 234))  # from train data
+                    hparams=dict(img_mean=img_mean)
                 ),
                 ToTensor(),
                 Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD))
