@@ -105,3 +105,4 @@ data:
     shrink_preview_scale: null
     batch_size: 8
     enable_caching: true
+    train_resize_type: resize
