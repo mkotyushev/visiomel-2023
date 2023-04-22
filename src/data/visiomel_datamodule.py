@@ -9,7 +9,7 @@ from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
 from sklearn.model_selection import StratifiedKFold
 from timm.data import rand_augment_transform
-from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize, RandomCrop, CenterCrop
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 from src.data.transforms import Shrink, CenterCropPct
@@ -134,6 +134,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         sampler: Optional[str] = None,
         enable_caching: bool = False,
         data_shrinked: bool = False,
+        train_resize_type: str = 'resize',
     ):
         super().__init__()
         
@@ -149,18 +150,26 @@ class VisiomelTrainDatamodule(LightningDataModule):
         if enable_caching:
             manager = Manager()
             self.shared_cache = manager.dict()
+        
         if data_shrinked:
-            self.pre_transform = Resize(size=(img_size, img_size))
+            self.pre_transform = None
         else:
             self.pre_transform = Compose(
                 [
                     CenterCropPct(size=(0.9, 0.9)),
                     Shrink(scale=shrink_preview_scale),
-                    Resize(size=(img_size, img_size)),
                 ]
             )
+
+        if train_resize_type == 'resize':
+            resize_transform_train = resize_transform_val = Resize(size=(img_size, img_size))
+        elif train_resize_type == 'random_crop':
+            resize_transform_train = RandomCrop(size=(img_size, img_size))
+            resize_transform_val = CenterCrop(size=(img_size, img_size))
+
         self.train_transform = Compose(
             [
+                resize_transform_train,
                 rand_augment_transform(
                     config_str='rand-m9-mstd0.5',
                     hparams=dict(img_mean=(238, 231, 234))  # from train data
@@ -172,6 +181,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
         non_train_transform = Compose(
             [
+                resize_transform_val,
                 ToTensor(),
                 Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD))
             ]
