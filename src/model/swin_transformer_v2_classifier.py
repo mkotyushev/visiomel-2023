@@ -4,7 +4,7 @@ from torch import Tensor
 from torch.nn import CrossEntropyLoss
 
 from src.model.visiomel_model import VisiomelClassifier
-from utils.utils import build_classifier
+from utils.utils import build_model
 from src.model.drloc.losses import cal_selfsupervised_loss
 
 
@@ -48,7 +48,7 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
                 'This will result in resetting of lower layers of the model. '
             )
         
-        self.model = build_classifier(
+        self.model = build_model(
             model_name, 
             num_classes, 
             patch_embed_backbone_name=patch_embed_backbone_name, 

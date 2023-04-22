@@ -176,7 +176,7 @@ def state_norm(module: torch.nn.Module, norm_type: Union[float, int, str], group
     return norms
 
 
-def build_classifier(
+def build_model(
     model_name, 
     num_classes, 
     img_size, 
