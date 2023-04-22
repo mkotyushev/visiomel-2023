@@ -181,6 +181,7 @@ def build_classifier(
     num_classes, 
     img_size, 
     patch_size, 
+    mock_class=SwinTransformerV2Modded,
     patch_embed_backbone_name=None,
     patch_embed_backbone_pretrained=True,
     pretrained=True,
@@ -203,7 +204,7 @@ def build_classifier(
         )
         patch_embed_backbone.set_grad_checkpointing(grad_checkpointing)
 
-    with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2Modded):
+    with patch('timm.models.swin_transformer_v2.SwinTransformerV2', mock_class):
         model = timm.create_model(
             model_name, 
             pretrained=False, 
