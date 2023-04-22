@@ -111,6 +111,8 @@ class VisiomelModel(LightningModule):
 
     def on_train_epoch_end(self) -> None:
         """Called in the training loop at the very end of the epoch."""
+        if self.train_metrics is None:
+            return
         for name, metric in self.train_metrics.items():
             prog_bar = (name == 'f1' or name == 'ce')
             self.log(
@@ -124,6 +126,8 @@ class VisiomelModel(LightningModule):
     
     def on_validation_epoch_end(self) -> None:
         """Called in the validation loop at the very end of the epoch."""
+        if self.val_metrics is None:
+            return
         for name, metric in self.val_metrics.items():
             prog_bar = (name == 'f1')
             self.log(
@@ -134,6 +138,9 @@ class VisiomelModel(LightningModule):
                 prog_bar=prog_bar,
             )
             metric.reset()
+        
+        if self.val_metrics_downsampled is None:
+            return
         for name, metric in self.val_metrics_downsampled.items():
             prog_bar = (name == 'ds_ce')
             self.log(
