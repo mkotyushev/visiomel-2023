@@ -11,7 +11,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from torchvision.datasets.folder import default_loader
 from typing import Dict, Optional, Union
-from model.patch_embed_with_backbone import SwinTransformerV2WithBackbone
+from model.patch_embed_with_backbone import SwinTransformerV2Modded
 from torchmetrics import Metric
 from mock import patch
 from sklearn.metrics import log_loss
@@ -186,6 +186,7 @@ def build_classifier(
     pretrained=True,
     quadtree=False,
     grad_checkpointing=False,
+    drloc_params=None
 ):   
     # Load pretrained model with its default img_size
     # and then load the pretrained weights to the model via
@@ -193,6 +194,7 @@ def build_classifier(
     pretrained_model = timm.create_model(
         model_name, pretrained=pretrained, num_classes=num_classes
     )
+    patch_embed_backbone = None
     if patch_embed_backbone_name is not None:
         patch_embed_backbone = timm.create_model(
             patch_embed_backbone_name, 
@@ -201,23 +203,16 @@ def build_classifier(
         )
         patch_embed_backbone.set_grad_checkpointing(grad_checkpointing)
 
-        with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2WithBackbone):
-            model = timm.create_model(
-                model_name, 
-                pretrained=False, 
-                num_classes=num_classes, 
-                img_size=img_size, 
-                patch_embed_backbone=patch_embed_backbone, 
-                patch_size=patch_size,
-                quadtree=quadtree,
-            )
-    else:
+    with patch('timm.models.swin_transformer_v2.SwinTransformerV2', SwinTransformerV2Modded):
         model = timm.create_model(
             model_name, 
             pretrained=False, 
             num_classes=num_classes, 
             img_size=img_size, 
-            patch_size=patch_size
+            patch_embed_backbone=patch_embed_backbone, 
+            patch_size=patch_size,
+            quadtree=quadtree,
+            drloc_params=drloc_params,
         )
     model = load_pretrained(pretrained_model.state_dict(), model)
     model.set_grad_checkpointing(grad_checkpointing)

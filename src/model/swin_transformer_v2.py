@@ -5,6 +5,7 @@ from torch.nn import CrossEntropyLoss
 
 from src.model.visiomel_model import VisiomelModel
 from utils.utils import build_classifier
+from src.model.drloc.losses import cal_selfsupervised_loss
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class SwinTransformerV2Classifier(VisiomelModel):
         quadtree: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         grad_checkpointing: bool = False,
+        drloc_params: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -56,9 +58,12 @@ class SwinTransformerV2Classifier(VisiomelModel):
             pretrained=pretrained,
             quadtree=quadtree,
             grad_checkpointing=grad_checkpointing,
+            drloc_params=drloc_params,
         )
 
         self.loss_fn = CrossEntropyLoss()
+        if self.hparams.drloc_params is not None:
+            self.criterion_ssup = cal_selfsupervised_loss
 
         # TODO: called in each VisiomelModel subclass but after subclass __init__
         # need to move to VisiomelModel somehow
@@ -69,6 +74,17 @@ class SwinTransformerV2Classifier(VisiomelModel):
     
     def compute_loss_preds(self, batch, *args, **kwargs):
         x, y = batch
-        preds = self(x)
-        loss = self.loss_fn(preds, y)
-        return loss, {'ce': loss}, preds
+        out = self(x)
+        
+        if self.hparams.drloc_params is None:
+            loss = self.loss_fn(out, y)
+            return loss, {'ce': loss}, out
+        else:
+            loss_sup = self.loss_fn(out.sup, y)
+            loss_ssup, ssup_items = self.criterion_ssup(
+                out, 
+                self.hparams.drloc_params['drloc_mode'], 
+                self.hparams.drloc_params['lambda_drloc']
+            )
+            loss = loss_sup + loss_ssup
+            return loss, {'ce': loss_sup, 'drloc': loss_ssup}, out.sup

@@ -1,11 +1,35 @@
 
+import math
+from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from munch import Munch
 from timm.models.layers import PatchEmbed
 from timm.models.swin_transformer_v2 import SwinTransformerV2
 
 from model.quadtree_embedding import QuadtreeEmbedding
+from model.drloc.aux_modules import DenseRelativeLoc
+
+
+def build_drloc(params):
+    drloc = nn.ModuleList()
+    if params['use_multiscale']:
+        for i_layer in range(params['num_layers']):
+            drloc.append(DenseRelativeLoc(
+                in_dim=min(int(params['embed_dim'] * 2 ** (i_layer+1)), params['num_features']), 
+                out_dim=2 if params['drloc_mode']=="l1" else max(params['img_size'] // (4 * 2**i_layer), params['img_size']//(4 * 2**(params['num_layers']-1))),
+                sample_size=params['sample_size'],
+                drloc_mode=params['drloc_mode'],
+                use_abs=params['use_abs']))
+    else:
+        drloc.append(DenseRelativeLoc(
+            in_dim=params['num_features'], 
+            out_dim=2 if params['drloc_mode']=="l1" else params['img_size']//(4 * 2**(params['num_layers']-1)),
+            sample_size=params['sample_size'],
+            drloc_mode=params['drloc_mode'],
+            use_abs=params['use_abs']))
+    return drloc
 
 
 class PatchBackbone(nn.Module):
@@ -130,7 +154,7 @@ class PatchEmbedWithBackbone(PatchEmbed):
             self.proj = PatchBackboneQuadtree(backbone, patch_size, embed_dim)
 
 
-class SwinTransformerV2WithBackbone(SwinTransformerV2):
+class SwinTransformerV2Modded(SwinTransformerV2):
     r""" Swin Transformer V2
         A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
             - https://arxiv.org/abs/2111.09883
@@ -156,13 +180,13 @@ class SwinTransformerV2WithBackbone(SwinTransformerV2):
     """
 
     def __init__(
-            self, patch_embed_backbone: nn.Module, quadtree: bool = False,
+            self, patch_embed_backbone: Optional[nn.Module] = None, quadtree: bool = False,
             img_size=224, patch_size=4, in_chans=3, num_classes=1000, global_pool='avg',
             embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24),
             window_size=7, mlp_ratio=4., qkv_bias=True,
             drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
             norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-            pretrained_window_sizes=(0, 0, 0, 0), **kwargs):
+            pretrained_window_sizes=(0, 0, 0, 0), drloc_params=None, **kwargs):
         super().__init__(
             img_size,
             patch_size,
@@ -185,7 +209,58 @@ class SwinTransformerV2WithBackbone(SwinTransformerV2):
             **kwargs
         )
 
-        self.patch_embed = PatchEmbedWithBackbone(
-            backbone=patch_embed_backbone, quadtree=quadtree,
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
-            norm_layer=norm_layer if self.patch_norm else None)
+        if patch_embed_backbone is not None:
+            self.patch_embed = PatchEmbedWithBackbone(
+                backbone=patch_embed_backbone, quadtree=quadtree,
+                img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
+                norm_layer=norm_layer if self.patch_norm else None)
+
+        self.drloc_params = drloc_params
+        if drloc_params is not None:
+            drloc_params['num_layers'] = len(depths)
+            drloc_params['num_features'] = int(embed_dim * 2 ** (len(depths) - 1))
+            drloc_params['embed_dim'] = embed_dim
+            drloc_params['img_size'] = img_size
+            self.drloc = build_drloc(drloc_params)
+
+    def forward_features(self, x):
+        x = self.patch_embed(x)
+        if self.absolute_pos_embed is not None:
+            x = x + self.absolute_pos_embed
+        x = self.pos_drop(x)
+
+        if self.drloc_params is not None and self.drloc_params['use_multiscale']:
+            all_layers = []
+            for layer in self.layers:
+                x = layer(x)
+                all_layers.append(x)
+            return all_layers
+        else:
+            for layer in self.layers:
+                x = layer(x)
+            return [x]
+
+    def forward(self, x):
+        x_layers = self.forward_features(x)
+        x = self.norm(x_layers[-1])
+        x = self.forward_head(x)
+
+        if self.drloc is None:
+            return x
+
+        outs = Munch(sup=x)
+        outs.drloc = []
+        outs.deltaxy = []
+        outs.plz = []
+
+        for idx, x_cur in enumerate(x_layers):
+            x_cur = x_cur.transpose(1, 2) # [B, C, L]
+            B, C, HW = x_cur. size()
+            H = W = int(math.sqrt(HW))
+            feats = x_cur.view(B, C, H, W) # [B, C, H, W]
+
+            drloc_feats, deltaxy = self.drloc[idx](feats)
+            outs.drloc.append(drloc_feats)
+            outs.deltaxy.append(deltaxy)
+            outs.plz.append(H) # plane size 
+        return outs
