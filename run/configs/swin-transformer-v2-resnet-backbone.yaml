@@ -1,20 +1,23 @@
 trainer:
   max_epochs: 50
-  check_val_every_n_epoch: 3
-  accumulate_grad_batches: 8
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 4
+  reload_dataloaders_every_n_epochs: 10  # to increase performance due to cache being filled
+  num_sanity_val_steps: 0
+  gradient_clip_val: 5
 model:
   init_args:
     grad_checkpointing: true
-    patch_embed_backbone_name: resnet18
+    patch_embed_backbone_name: resnet10t
     model_name: swinv2_tiny_window8_256
-    pretrained: false
-    patch_size: 224
+    pretrained: true
+    patch_size: 160
     optimizer_init: 
       class_path: torch.optim.AdamW
       init_args:
         weight_decay: 0.01
         eps: 1e-08
-        lr: 1e-3
+        lr: 1e-5
     lr_scheduler_init:
       class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
       init_args:
@@ -32,14 +35,16 @@ model:
       interval: step
       frequency: 1
     lr_layer_decay:
-      model.patch_embed.proj.backbone: 1e-2
+      model.patch_embed.proj.linear: 1e1
+      model.head: 1e2
     finetuning: null
 data:
   init_args:
     data_dir_train: /workspace/data/images_page_4_shrink/
-    img_size: 3584
+    img_size: 2560
     data_shrinked: true
     shrink_preview_scale: null
-    batch_size: 4
+    batch_size: 8
     num_workers: 3
-    enable_caching: false
+    num_workers_saturated: 10
+    enable_caching: true
