@@ -1,5 +1,6 @@
 import logging
 import random
+import numpy as np
 import torch
 from collections import Counter, defaultdict
 from copy import deepcopy
@@ -10,8 +11,17 @@ from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
 from sklearn.model_selection import StratifiedKFold
 from timm.data import rand_augment_transform
-from torchvision.transforms import Compose, Resize, ToTensor, Normalize, RandomCrop, CenterCrop
+from torchvision.transforms import (
+    Compose, 
+    Resize, 
+    ToTensor, 
+    Normalize, 
+    RandomCrop, 
+    CenterCrop,
+    RandomHorizontalFlip
+)
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from torch.utils.data._utils.collate import default_collate
 
 from src.data.transforms import Shrink, CenterCropPct
 from src.utils.utils import loader_with_filepath
@@ -161,19 +171,14 @@ class VisiomelTrainDatamodule(LightningDataModule):
             manager = Manager()
             self.shared_cache = manager.dict()
         
-        # Build data transformations
-        self.build_transforms()
-
-        self.train_dataset: Optional[Dataset] = None
-        self.val_dataset: Optional[Dataset] = None
-        self.val_dataset_downsampled: Optional[Dataset] = None
-        self.test_dataset: Optional[Dataset] = None
+        self.collate_fn = None
 
     def build_transforms(self):
         """Build task-specific data transformations."""
     
     def setup(self, stage=None) -> None:
         """Setup data."""
+        self.build_transforms()
 
     def train_dataloader(self) -> DataLoader:
         sampler, shuffle = None, True
@@ -187,6 +192,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             pin_memory=self.hparams.pin_memory, 
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
+            collate_fn=self.collate_fn,
             sampler=sampler,
             shuffle=shuffle
         )
@@ -199,6 +205,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
+            collate_fn=self.collate_fn,
             shuffle=False
         )
         val_dataloader_downsampled = DataLoader(
@@ -208,6 +215,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
+            collate_fn=self.collate_fn,
             shuffle=False
         )
         return [val_dataloader, val_dataloader_downsampled]
@@ -221,6 +229,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
+            collate_fn=self.collate_fn,
             shuffle=False
         )
 
@@ -330,6 +339,8 @@ class VisiomelTrainDatamoduleClassification(LightningDataModule):
 
     def setup(self, stage=None) -> None:
         """Setup data."""
+        super().setup(stage)
+
         if self.train_dataset is None and self.val_dataset is None:
             # Train & val dataset as k-th fold
             dataset = VisiomelImageFolder(
@@ -363,5 +374,148 @@ class VisiomelTrainDatamoduleClassification(LightningDataModule):
                 shared_cache=None,
                 pre_transform=self.pre_transform,
                 transform=self.test_transform, 
+                loader=loader_with_filepath
+            )
+
+
+def simmim_collate_fn(batch):
+    if not isinstance(batch[0][0], tuple):
+        return default_collate(batch)
+    else:
+        batch_num = len(batch)
+        ret = []
+        for item_idx in range(len(batch[0][0])):
+            if batch[0][0][item_idx] is None:
+                ret.append(None)
+            else:
+                ret.append(default_collate([batch[i][0][item_idx] for i in range(batch_num)]))
+        ret.append(default_collate([batch[i][1] for i in range(batch_num)]))
+        return ret
+
+
+class MaskGenerator:
+    def __init__(self, input_size=192, mask_patch_size=32, model_patch_size=4, mask_ratio=0.6):
+        self.input_size = input_size
+        self.mask_patch_size = mask_patch_size
+        self.model_patch_size = model_patch_size
+        self.mask_ratio = mask_ratio
+        
+        assert self.input_size % self.mask_patch_size == 0
+        assert self.mask_patch_size % self.model_patch_size == 0
+        
+        self.rand_size = self.input_size // self.mask_patch_size
+        self.scale = self.mask_patch_size // self.model_patch_size
+        
+        self.token_count = self.rand_size ** 2
+        self.mask_count = int(np.ceil(self.token_count * self.mask_ratio))
+        
+    def __call__(self):
+        mask_idx = np.random.permutation(self.token_count)[:self.mask_count]
+        mask = np.zeros(self.token_count, dtype=int)
+        mask[mask_idx] = 1
+        
+        mask = mask.reshape((self.rand_size, self.rand_size))
+        mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
+        
+        return mask
+
+
+class SimMIMTransform:
+    def __init__(self, mask_generator):
+        self.mask_generator = mask_generator
+
+    def __call__(self, img):
+        mask = self.mask_generator()
+        return img, mask
+
+
+class VisiomelTrainDatamoduleSimMIM(LightningDataModule):
+    def __init__(
+        self,
+        data_dir_train: str = './data/train',	
+        k: int = 5,
+        fold_index: int = 0,
+        data_dir_test: Optional[str] = None,
+        img_size: int = 224,
+        shrink_preview_scale: Optional[int] = None,
+        batch_size: int = 32,
+        split_seed: int = 0,
+        num_workers: int = 0,
+        num_workers_saturated: int = 0,
+        pin_memory: bool = False,
+        prefetch_factor: int = 2,
+        persistent_workers: bool = False,
+        sampler: Optional[str] = None,
+        enable_caching: bool = False,
+        data_shrinked: bool = False,
+        train_resize_type: str = 'resize',
+        mask_patch_size: int = 32,
+        model_patch_size: int = 4,
+        mask_ratio: float = 0.6
+    ):
+        super().__init__(
+            data_dir_train=data_dir_train,
+            k=k,
+            fold_index=fold_index,
+            data_dir_test=data_dir_test,
+            img_size=img_size,
+            shrink_preview_scale=shrink_preview_scale,
+            batch_size=batch_size,
+            split_seed=split_seed,
+            num_workers=num_workers,
+            num_workers_saturated=num_workers_saturated,
+            pin_memory=pin_memory,
+            prefetch_factor=prefetch_factor,
+            persistent_workers=persistent_workers,
+            sampler=sampler,
+            enable_caching=enable_caching,
+            data_shrinked=data_shrinked,
+            train_resize_type=train_resize_type
+        )
+        self.save_hyperparameters()
+        self.mask_generator = MaskGenerator(
+            input_size=img_size,
+            mask_patch_size=mask_patch_size,
+            model_patch_size=model_patch_size,
+            mask_ratio=mask_ratio,
+        )
+        self.collate_fn = simmim_collate_fn
+    
+    def build_transforms(self):
+        """Build task-specific data transformations."""
+        assert self.hparams.train_resize_type == 'resize'
+        resize_transform_pre_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
+
+        if self.hparams.data_shrinked:
+            self.pre_transform = resize_transform_pre_transform
+        else:
+            self.pre_transform = Compose(
+                [
+                    CenterCropPct(size=(0.9, 0.9)),
+                    Shrink(scale=self.hparams.shrink_preview_scale),
+                    resize_transform_pre_transform,
+                ]
+            )
+
+        self.transform = Compose(
+            [
+                RandomHorizontalFlip(),
+                ToTensor(),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                SimMIMTransform(self.mask_generator),
+            ]
+        )
+
+    def setup(self, stage=None) -> None:
+        """Setup data."""
+        super().setup(stage)
+
+        if self.train_dataset is None and self.val_dataset is None:
+            # Train & val dataset as k-th fold
+            self.train_dataset = VisiomelImageFolder(
+                self.hparams.data_dir_train, 
+                shared_cache=self.shared_cache,
+                pre_transform=self.pre_transform,
+                transform=self.transform, 
                 loader=loader_with_filepath
             )
