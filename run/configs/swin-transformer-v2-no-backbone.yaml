@@ -1,7 +1,7 @@
 trainer:
   max_epochs: 20
   check_val_every_n_epoch: 1
-  accumulate_grad_batches: 8
+  accumulate_grad_batches: 4
   reload_dataloaders_every_n_epochs: 10  # to increase performance due to cache being filled
   num_sanity_val_steps: 0
 model:
@@ -38,10 +38,11 @@ model:
 data:
   init_args:
     data_dir_train: /workspace/data/images_page_4_shrink/
-    img_size: 2304
+    img_size: 2048
     data_shrinked: true
     shrink_preview_scale: null
-    batch_size: 4
-    num_workers: 3
-    num_workers_saturated: 8
-    enable_caching: true
+    batch_size: 8
+    num_workers: 10
+    num_workers_saturated: 10
+    enable_caching: false
+    train_resize_type: random_crop
