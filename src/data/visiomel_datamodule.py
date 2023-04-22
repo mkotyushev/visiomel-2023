@@ -237,7 +237,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         return self.test_dataloader()
 
 
-class VisiomelTrainDatamoduleClassification(LightningDataModule):
+class VisiomelTrainDatamoduleClassification(VisiomelTrainDatamodule):
     def __init__(
         self,
         data_dir_train: str = './data/train',	
@@ -429,7 +429,7 @@ class SimMIMTransform:
         return img, mask
 
 
-class VisiomelTrainDatamoduleSimMIM(LightningDataModule):
+class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     def __init__(
         self,
         data_dir_train: str = './data/train',	
