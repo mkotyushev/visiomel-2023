@@ -155,33 +155,45 @@ class VisiomelTrainDatamodule(LightningDataModule):
         # so we train on 90% of the data and validate on 10%
         assert 0 <= fold_index < k, "incorrect fold number"
         
-        # data transformations
+        # Caching
         self.shared_cache = None
         if enable_caching:
             manager = Manager()
             self.shared_cache = manager.dict()
         
-        if train_resize_type == 'resize':
+        # Build data transformations
+        self.build_transforms()
+
+        self.train_dataset: Optional[Dataset] = None
+        self.val_dataset: Optional[Dataset] = None
+        self.val_dataset_downsampled: Optional[Dataset] = None
+        self.test_dataset: Optional[Dataset] = None
+
+    def build_transforms(self):
+        if self.hparams.train_resize_type == 'resize':
             # Resize could be used for caching, so use it in pre_transform
             resize_transform_train = resize_transform_val = IdentityTransform()
-            resize_transform_pre_transform = Resize(size=(img_size, img_size))
-        elif train_resize_type == 'random_crop':
+            resize_transform_pre_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
+        elif self.hparams.train_resize_type == 'random_crop':
             # RandomCrop is not suitable for caching, so use it in train_transform
             # and do not resize in pre_transform. If enable_caching is set, 
             # it will cache large images before resize.
-            if enable_caching:
-                logger.warning('Caching is enabled with large images. Consider using "resize" train_resize_type.')
-            resize_transform_train = RandomCrop(size=(img_size, img_size))
-            resize_transform_val = CenterCrop(size=(img_size, img_size))
+            if self.hparams.enable_caching:
+                logger.warning(
+                    'Caching is enabled with large images. '
+                    'Consider using "resize" train_resize_type.'
+                )
+            resize_transform_train = RandomCrop(size=(self.hparams.img_size, self.hparams.img_size))
+            resize_transform_val = CenterCrop(size=(self.hparams.img_size, self.hparams.img_size))
             resize_transform_pre_transform = IdentityTransform()
 
-        if data_shrinked:
+        if self.hparams.data_shrinked:
             self.pre_transform = resize_transform_pre_transform
         else:
             self.pre_transform = Compose(
                 [
                     CenterCropPct(size=(0.9, 0.9)),
-                    Shrink(scale=shrink_preview_scale),
+                    Shrink(scale=self.hparams.shrink_preview_scale),
                     resize_transform_pre_transform,
                 ]
             )
@@ -207,11 +219,6 @@ class VisiomelTrainDatamodule(LightningDataModule):
         )
         self.val_transform = non_train_transform
         self.test_transform = non_train_transform
-
-        self.train_dataset: Optional[Dataset] = None
-        self.val_dataset: Optional[Dataset] = None
-        self.val_dataset_downsampled: Optional[Dataset] = None
-        self.test_dataset: Optional[Dataset] = None
 
     def setup(self, stage=None) -> None:
         if self.train_dataset is None and self.val_dataset is None:
