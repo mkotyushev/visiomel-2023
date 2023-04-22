@@ -183,7 +183,11 @@ class VisiomelTrainDatamodule(LightningDataModule):
                     'Caching is enabled with large images. '
                     'Consider using "resize" train_resize_type.'
                 )
-            resize_transform_train = RandomCrop(size=(self.hparams.img_size, self.hparams.img_size))
+            resize_transform_train = RandomCrop(
+                size=(self.hparams.img_size, self.hparams.img_size),
+                pad_if_needed=True,
+                padding_mode='reflect'
+            )
             resize_transform_val = CenterCrop(size=(self.hparams.img_size, self.hparams.img_size))
             resize_transform_pre_transform = IdentityTransform()
 
