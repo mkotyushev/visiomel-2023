@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Union
 from torch import Tensor
 from torch.nn import CrossEntropyLoss
 
-from src.model.visiomel_model import VisiomelModel
+from src.model.visiomel_model import VisiomelClassifier
 from utils.utils import build_classifier
 from src.model.drloc.losses import cal_selfsupervised_loss
 
@@ -11,7 +11,7 @@ from src.model.drloc.losses import cal_selfsupervised_loss
 logger = logging.getLogger(__name__)
 
 
-class SwinTransformerV2Classifier(VisiomelModel):
+class SwinTransformerV2Classifier(VisiomelClassifier):
     def __init__(
         self, 
         model_name: str, 

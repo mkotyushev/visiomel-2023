@@ -26,40 +26,24 @@ class VisiomelModel(LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.train_metrics = ModuleDict(
-            {
-                'll': LogLossScore()
-            }
-        )
-        self.val_metrics = ModuleDict(
-            {
-                'll': LogLossScore()
-            }
-        )
-        self.val_metrics_downsampled = ModuleDict(
-            {
-                'ds_ll': LogLossScore()
-            }
-        )
+
+        self.train_metrics = None
+        self.val_metrics = None
+        self.val_metrics_downsampled = None
+
+        self.configure_metrics()
 
     def compute_loss_preds(self, batch, *args, **kwargs):
         """Compute losses and predictions."""
 
+    def configure_metrics(self):
+        """Configure task-specific metrics."""
+
     def update_train_metrics(self, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[1].detach(), preds[:, 1].detach()
-        for _, metric in self.train_metrics.items():
-            metric.update(y_pred, y)
 
     def update_val_metrics(self, preds, batch, dataloader_idx=0):
         """Update val metrics."""
-        y, y_pred = batch[1].detach(), preds[:, 1].detach()
-        if dataloader_idx == 0:
-            for _, metric in self.val_metrics.items():
-                metric.update(y_pred, y)
-        else:
-            for _, metric in self.val_metrics_downsampled.items():
-                metric.update(y_pred, y)
 
     def on_train_epoch_start(self) -> None:
         """Called in the training loop at the very beginning of the epoch."""
@@ -268,3 +252,51 @@ class VisiomelModel(LightningModule):
             self.log_dict(norms)
         else:
             self.log('state_2.0_norm_total', norms['state_2.0_norm_total'])
+
+
+class VisiomelClassifier(VisiomelModel):
+    def __init__(
+        self, 
+        optimizer_init: Optional[Dict[str, Any]] = None,
+        lr_scheduler_init: Optional[Dict[str, Any]] = None,
+        pl_lrs_cfg: Optional[Dict[str, Any]] = None,
+        finetuning: Optional[Dict[str, Any]] = None,
+        log_norm_verbose: bool = False,
+        lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+    def configure_metrics(self):
+        """Configure task-specific metrics."""
+        self.train_metrics = ModuleDict(
+            {
+                'll': LogLossScore()
+            }
+        )
+        self.val_metrics = ModuleDict(
+            {
+                'll': LogLossScore()
+            }
+        )
+        self.val_metrics_downsampled = ModuleDict(
+            {
+                'ds_ll': LogLossScore()
+            }
+        )
+
+    def update_train_metrics(self, preds, batch):
+        """Update train metrics."""
+        y, y_pred = batch[1].detach(), preds[:, 1].detach()
+        for _, metric in self.train_metrics.items():
+            metric.update(y_pred, y)
+
+    def update_val_metrics(self, preds, batch, dataloader_idx=0):
+        """Update val metrics."""
+        y, y_pred = batch[1].detach(), preds[:, 1].detach()
+        if dataloader_idx == 0:
+            for _, metric in self.val_metrics.items():
+                metric.update(y_pred, y)
+        else:
+            for _, metric in self.val_metrics_downsampled.items():
+                metric.update(y_pred, y)

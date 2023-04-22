@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 from typing import Any, Dict, Optional, Union
 
-from src.model.visiomel_model import VisiomelModel
+from src.model.visiomel_model import VisiomelClassifier
 
 
-class TimmClassifier(VisiomelModel):
+class TimmClassifier(VisiomelClassifier):
     def __init__(
         self, 
         backbone_name, 
