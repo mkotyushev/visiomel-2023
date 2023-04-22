@@ -1,16 +1,47 @@
+trainer:
+  max_epochs: 50
+  check_val_every_n_epoch: 3
+  accumulate_grad_batches: 32
+  reload_dataloaders_every_n_epochs: 10  # to increase performance due to cache being filled
+  num_sanity_val_steps: 0
 model:
   init_args:
-    model_name: swinv2_base_window12to24_192to384_22kft1k
+    grad_checkpointing: true
     patch_embed_backbone_name: null
+    model_name: swinv2_base_window12to24_192to384_22kft1k
+    pretrained: true
     patch_size: 4
-    finetuning:
-      unfreeze_before_epoch: 0
-      unfreeze_layer_names_startswith:
-        - model.head
+    optimizer_init: 
+      class_path: torch.optim.AdamW
+      init_args:
+        weight_decay: 0.01
+        eps: 1e-08
+        lr: 1e-3
+    lr_scheduler_init:
+      class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
+      init_args:
+        milestones: [0, 0.1, 1.0]
+        pieces:
+          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+            init_args:
+              start_lr: 1e-2
+              stop_lr: 1
+          - class_path: src.utils.lr_scheduler.CosineLRSchedulerPiece
+            init_args:
+              start_lr: 1
+              stop_lr: 1e-2
+    pl_lrs_cfg:
+      interval: step
+      frequency: 1
+    lr_layer_decay: 0.99
+    finetuning: null
 data:
   init_args:
-    data_dir_train: /workspace/data/images_page_7/
-    img_size: 768
+    data_dir_train: /workspace/data/images_page_4_shrink/
+    img_size: 2304
+    data_shrinked: true
     shrink_preview_scale: null
-    batch_size: 2
+    batch_size: 1
+    num_workers: 3
+    num_workers_saturated: 8
     enable_caching: true
