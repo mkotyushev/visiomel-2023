@@ -1,13 +1,26 @@
 trainer:
-  max_epochs: 20
+  max_epochs: 10
   limit_val_batches: 0
   num_sanity_val_steps: 0
-  accumulate_grad_batches: 4
-  reload_dataloaders_every_n_epochs: 10  # to increase performance due to cache being filled
+  accumulate_grad_batches: 32
+  reload_dataloaders_every_n_epochs: 0
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: step
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        save_top_k: 1
+        monitor: train_loss_simmim
+        every_n_epochs: 1
+        mode: min
+        save_on_train_epoch_end: true
+        save_last: true
 model:
   class_path: src.model.swin_transformer_v2_simmim.SwinTransformerV2SimMIM
   init_args:
-    model_name: swinv2_tiny_window8_256
+    grad_checkpointing: true
+    model_name: swinv2_large_window12to24_192to384_22kft1k
     pretrained: true
     patch_size: 4
     optimizer_init: 
@@ -15,7 +28,7 @@ model:
       init_args:
         weight_decay: 0.01
         eps: 1e-08
-        lr: 1e-3
+        lr: 1e-4
     lr_scheduler_init:
       class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
       init_args:
@@ -38,14 +51,14 @@ data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamoduleSimMIM
   init_args:
     data_dir_train: /workspace/data/images_page_4_shrink/
-    img_size: 2048
+    img_size: 1536
     data_shrinked: true
     shrink_preview_scale: null
-    batch_size: 8
-    num_workers: 3
-    num_workers_saturated: 6
+    batch_size: 1
+    num_workers: 8
+    num_workers_saturated: 8
     enable_caching: true
     train_resize_type: resize
-    mask_patch_size: 64
+    mask_patch_size: 32
     model_patch_size: 4
     mask_ratio: 0.6
