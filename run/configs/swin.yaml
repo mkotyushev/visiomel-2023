@@ -1,5 +1,5 @@
 model:
-  class_path: src.model.swin_transformer_v2.SwinTransformerV2Classifier
+  class_path: src.model.swin_transformer_v2_classifier.SwinTransformerV2Classifier
   init_args:
     model_name: swinv2_base_window12to24_192to384_22kft1k
     num_classes: 2
