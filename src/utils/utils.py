@@ -245,6 +245,6 @@ class LogLossScore(Metric):
         self.target.append(target)
 
     def compute(self):
-        self.preds = torch.cat(self.preds, dim=0)
+        self.preds = torch.softmax(torch.cat(self.preds, dim=0), dim=1)
         self.target = torch.cat(self.target, dim=0)
-        return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy()[:, 1], eps=1e-16).item()
+        return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy(), eps=1e-16).item()

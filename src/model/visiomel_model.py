@@ -28,21 +28,16 @@ class VisiomelModel(LightningModule):
         self.save_hyperparameters()
         self.train_metrics = ModuleDict(
             {
-                'acc': BinaryAccuracy(),
-                'f1': BinaryF1Score(),
                 'll': LogLossScore()
             }
         )
         self.val_metrics = ModuleDict(
             {
-                'acc': BinaryAccuracy(),
-                'f1': BinaryF1Score(),
                 'll': LogLossScore()
             }
         )
         self.val_metrics_downsampled = ModuleDict(
             {
-                'ds_acc': BinaryAccuracy(),
                 'ds_ll': LogLossScore()
             }
         )
