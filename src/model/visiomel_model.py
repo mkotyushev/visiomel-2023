@@ -69,6 +69,11 @@ class VisiomelModel(LightningModule):
             if self.current_epoch == self.hparams.finetuning['unfreeze_before_epoch']:
                 self.unfreeze()
 
+    def on_train_start(self) -> None:
+        # Change dataloader num_workers to 10
+        # after cache is filled
+        self.trainer.datamodule.hparams.num_workers = self.trainer.datamodule.hparams.num_workers_saturated
+
     def unfreeze_only_selected(self):
         """
         Unfreeze only layers selected by 
