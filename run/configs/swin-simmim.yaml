@@ -1,0 +1,51 @@
+trainer:
+  max_epochs: 20
+  limit_val_batches: 0
+  num_sanity_val_steps: 0
+  accumulate_grad_batches: 4
+  reload_dataloaders_every_n_epochs: 10  # to increase performance due to cache being filled
+model:
+  class_path: src.model.swin_transformer_v2_simmim.SwinTransformerV2SimMIM
+  init_args:
+    model_name: swinv2_tiny_window8_256
+    pretrained: true
+    patch_size: 4
+    optimizer_init: 
+      class_path: torch.optim.AdamW
+      init_args:
+        weight_decay: 0.01
+        eps: 1e-08
+        lr: 1e-3
+    lr_scheduler_init:
+      class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
+      init_args:
+        milestones: [0, 0.1, 1.0]
+        pieces:
+          - class_path: src.utils.lr_scheduler.LinearLRSchedulerPiece
+            init_args:
+              start_lr: 1e-2
+              stop_lr: 1
+          - class_path: src.utils.lr_scheduler.CosineLRSchedulerPiece
+            init_args:
+              start_lr: 1
+              stop_lr: 1e-2
+    pl_lrs_cfg:
+      interval: step
+      frequency: 1
+    lr_layer_decay: 0.99
+    finetuning: null
+data:
+  class_path: src.data.visiomel_datamodule.VisiomelTrainDatamoduleSimMIM
+  init_args:
+    data_dir_train: /workspace/data/images_page_4_shrink/
+    img_size: 2048
+    data_shrinked: true
+    shrink_preview_scale: null
+    batch_size: 8
+    num_workers: 3
+    num_workers_saturated: 6
+    enable_caching: true
+    train_resize_type: resize
+    mask_patch_size: 64
+    model_patch_size: 4
+    mask_ratio: 0.6
