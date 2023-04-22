@@ -1,3 +1,4 @@
+import logging
 import random
 import torch
 from collections import Counter, defaultdict
@@ -14,6 +15,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 from src.data.transforms import Shrink, CenterCropPct
 from src.utils.utils import loader_with_filepath
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubsetDataset(Dataset):
@@ -115,6 +119,12 @@ def build_downsampled_dataset(subset_dataset: SubsetDataset):
     
     return subset_dataset
 
+
+class IdentityTransform:
+    def __call__(self, x):
+        return x
+
+
 class VisiomelTrainDatamodule(LightningDataModule):
     def __init__(
         self,
@@ -151,21 +161,30 @@ class VisiomelTrainDatamodule(LightningDataModule):
             manager = Manager()
             self.shared_cache = manager.dict()
         
+        if train_resize_type == 'resize':
+            # Resize could be used for caching, so use it in pre_transform
+            resize_transform_train = resize_transform_val = IdentityTransform()
+            resize_transform_pre_transform = Resize(size=(img_size, img_size))
+        elif train_resize_type == 'random_crop':
+            # RandomCrop is not suitable for caching, so use it in train_transform
+            # and do not resize in pre_transform. If enable_caching is set, 
+            # it will cache large images before resize.
+            if enable_caching:
+                logger.warning('Caching is enabled with large images. Consider using "resize" train_resize_type.')
+            resize_transform_train = RandomCrop(size=(img_size, img_size))
+            resize_transform_val = CenterCrop(size=(img_size, img_size))
+            resize_transform_pre_transform = IdentityTransform()
+
         if data_shrinked:
-            self.pre_transform = None
+            self.pre_transform = resize_transform_pre_transform
         else:
             self.pre_transform = Compose(
                 [
                     CenterCropPct(size=(0.9, 0.9)),
                     Shrink(scale=shrink_preview_scale),
+                    resize_transform_pre_transform,
                 ]
             )
-
-        if train_resize_type == 'resize':
-            resize_transform_train = resize_transform_val = Resize(size=(img_size, img_size))
-        elif train_resize_type == 'random_crop':
-            resize_transform_train = RandomCrop(size=(img_size, img_size))
-            resize_transform_val = CenterCrop(size=(img_size, img_size))
 
         self.train_transform = Compose(
             [
