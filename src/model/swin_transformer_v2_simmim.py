@@ -131,6 +131,7 @@ class SwinTransformerV2SimMIM(VisiomelModel):
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        grad_checkpointing: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -157,6 +158,7 @@ class SwinTransformerV2SimMIM(VisiomelModel):
             patch_size=patch_size,
             pretrained=pretrained,
         )
+        encoder.set_grad_checkpointing(grad_checkpointing)
         self.model = SimMIM(
             encoder=encoder, 
             encoder_stride=32, 
