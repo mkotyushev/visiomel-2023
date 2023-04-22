@@ -9,6 +9,7 @@ model:
   init_args:
     grad_checkpointing: true
     patch_embed_backbone_name: resnet10t
+    patch_embed_backbone_pretrained: true
     model_name: swinv2_tiny_window8_256
     pretrained: true
     patch_size: 160

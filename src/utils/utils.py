@@ -182,6 +182,7 @@ def build_classifier(
     img_size, 
     patch_size, 
     patch_embed_backbone_name=None,
+    patch_embed_backbone_pretrained=True,
     pretrained=True,
     quadtree=False,
     grad_checkpointing=False,
@@ -194,7 +195,9 @@ def build_classifier(
     )
     if patch_embed_backbone_name is not None:
         patch_embed_backbone = timm.create_model(
-            patch_embed_backbone_name, pretrained=True, num_classes=0
+            patch_embed_backbone_name, 
+            pretrained=patch_embed_backbone_pretrained, 
+            num_classes=0
         )
         patch_embed_backbone.set_grad_checkpointing(grad_checkpointing)
 
