@@ -230,8 +230,9 @@ class VisiomelModel(LightningModule):
                 max_epochs = self.trainer.max_epochs
 
             total_steps = len(self.trainer.fit_loop._data_source.dataloader()) * max_epochs
+            grad_accum_steps = self.trainer.accumulate_grad_batches
             self.hparams.lr_scheduler_init['init_args']['milestones'] = [
-                int(milestone * total_steps) 
+                int(milestone * total_steps / grad_accum_steps) 
                 for milestone in self.hparams.lr_scheduler_init['init_args']['milestones']
             ]
         
