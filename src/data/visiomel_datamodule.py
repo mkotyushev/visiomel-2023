@@ -127,6 +127,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         batch_size: int = 32,
         split_seed: int = 0,
         num_workers: int = 0,
+        num_workers_saturated: int = 0,
         pin_memory: bool = False,
         prefetch_factor: int = 2,
         persistent_workers: bool = False,
