@@ -18,21 +18,15 @@ class SwinTransformerV2SimMIM(VisiomelModel):
     def __init__(
         self, 
         model_name: str, 
-        num_classes: int = 2, 
         img_size = 224, 
         patch_size: int = 4,
-        patch_embed_backbone_name: Optional[str] = None,
-        patch_embed_backbone_pretrained: bool = True,
         optimizer_init: Optional[Dict[str, Any]] = None,
         lr_scheduler_init: Optional[Dict[str, Any]] = None,
         pl_lrs_cfg: Optional[Dict[str, Any]] = None,
         pretrained: bool = True,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
-        quadtree: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
-        grad_checkpointing: bool = False,
-        drloc_params: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -55,14 +49,9 @@ class SwinTransformerV2SimMIM(VisiomelModel):
             model_name, 
             mock_class=SwinTransformerV2ForSimMIM,
             num_classes=0, 
-            patch_embed_backbone_name=patch_embed_backbone_name, 
-            patch_embed_backbone_pretrained=patch_embed_backbone_pretrained,
             img_size=img_size, 
             patch_size=patch_size,
             pretrained=pretrained,
-            quadtree=quadtree,
-            grad_checkpointing=grad_checkpointing,
-            drloc_params=drloc_params,
         )
 
         # TODO: called in each VisiomelModel subclass but after subclass __init__
@@ -85,6 +74,6 @@ class SwinTransformerV2SimMIM(VisiomelModel):
         return self.model(x)
     
     def compute_loss_preds(self, batch, *args, **kwargs):
-        img, mask = batch
+        img, mask, _ = batch
         loss = self.model(img, mask)
         return loss, {'simmim': loss}, None

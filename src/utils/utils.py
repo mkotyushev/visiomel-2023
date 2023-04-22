@@ -78,25 +78,26 @@ def load_pretrained(state_dict, model):
                 absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.flatten(1, 2)
                 state_dict[k] = absolute_pos_embed_pretrained_resized
 
-    # check classifier, if not match, then re-init classifier to zero
-    head_bias_pretrained = state_dict['head.bias']
-    Nc1 = head_bias_pretrained.shape[0]
-    Nc2 = model.head.bias.shape[0]
-    if (Nc1 != Nc2):
-        if Nc1 == 21841 and Nc2 == 1000:
-            logger.info("loading ImageNet-22K weight to ImageNet-1K ......")
-            map22kto1k_path = f'data/map22kto1k.txt'
-            with open(map22kto1k_path) as f:
-                map22kto1k = f.readlines()
-            map22kto1k = [int(id22k.strip()) for id22k in map22kto1k]
-            state_dict['head.weight'] = state_dict['head.weight'][map22kto1k, :]
-            state_dict['head.bias'] = state_dict['head.bias'][map22kto1k]
-        else:
-            torch.nn.init.constant_(model.head.bias, 0.)
-            torch.nn.init.constant_(model.head.weight, 0.)
-            del state_dict['head.weight']
-            del state_dict['head.bias']
-            logger.warning(f"Error in loading classifier head, re-init classifier head to 0")
+    if 'head.bias' in state_dict:
+        # check classifier, if not match, then re-init classifier to zero
+        head_bias_pretrained = state_dict['head.bias']
+        Nc1 = head_bias_pretrained.shape[0]
+        Nc2 = model.head.bias.shape[0]
+        if (Nc1 != Nc2):
+            if Nc1 == 21841 and Nc2 == 1000:
+                logger.info("loading ImageNet-22K weight to ImageNet-1K ......")
+                map22kto1k_path = f'data/map22kto1k.txt'
+                with open(map22kto1k_path) as f:
+                    map22kto1k = f.readlines()
+                map22kto1k = [int(id22k.strip()) for id22k in map22kto1k]
+                state_dict['head.weight'] = state_dict['head.weight'][map22kto1k, :]
+                state_dict['head.bias'] = state_dict['head.bias'][map22kto1k]
+            else:
+                torch.nn.init.constant_(model.head.bias, 0.)
+                torch.nn.init.constant_(model.head.weight, 0.)
+                del state_dict['head.weight']
+                del state_dict['head.bias']
+                logger.warning(f"Error in loading classifier head, re-init classifier head to 0")
 
     msg = model.load_state_dict(state_dict, strict=False)
     logger.warning(msg)
@@ -186,7 +187,6 @@ def build_model(
     patch_embed_backbone_pretrained=True,
     pretrained=True,
     quadtree=False,
-    grad_checkpointing=False,
     drloc_params=None
 ):   
     # Load pretrained model with its default img_size
@@ -202,7 +202,6 @@ def build_model(
             pretrained=patch_embed_backbone_pretrained, 
             num_classes=0
         )
-        patch_embed_backbone.set_grad_checkpointing(grad_checkpointing)
 
     with patch('timm.models.swin_transformer_v2.SwinTransformerV2', mock_class):
         model = timm.create_model(
@@ -216,7 +215,6 @@ def build_model(
             drloc_params=drloc_params,
         )
     model = load_pretrained(pretrained_model.state_dict(), model)
-    model.set_grad_checkpointing(grad_checkpointing)
 
     del pretrained_model
     torch.cuda.empty_cache()

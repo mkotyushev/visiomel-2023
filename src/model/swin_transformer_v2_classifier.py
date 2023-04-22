@@ -57,9 +57,11 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
             patch_size=patch_size,
             pretrained=pretrained,
             quadtree=quadtree,
-            grad_checkpointing=grad_checkpointing,
             drloc_params=drloc_params,
         )
+        self.model.set_grad_checkpointing(grad_checkpointing)
+        if patch_embed_backbone_name is not None:
+            self.model.proj.backbone.set_grad_checkpointing(grad_checkpointing)
 
         self.loss_fn = CrossEntropyLoss()
         if self.hparams.drloc_params is not None:

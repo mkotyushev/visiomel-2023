@@ -173,6 +173,10 @@ class VisiomelTrainDatamodule(LightningDataModule):
         
         self.collate_fn = None
 
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
+
     def build_transforms(self):
         """Build task-specific data transformations."""
     
@@ -509,9 +513,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     def setup(self, stage=None) -> None:
         """Setup data."""
         super().setup(stage)
-
-        if self.train_dataset is None and self.val_dataset is None:
-            # Train & val dataset as k-th fold
+        if self.train_dataset is None:
             self.train_dataset = VisiomelImageFolder(
                 self.hparams.data_dir_train, 
                 shared_cache=self.shared_cache,
@@ -519,3 +521,9 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 transform=self.transform, 
                 loader=loader_with_filepath
             )
+
+    def val_dataloader(self) -> DataLoader:
+        return None
+    
+    def test_dataloader(self) -> DataLoader:
+        return None
