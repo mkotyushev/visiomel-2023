@@ -35,7 +35,7 @@ model:
     #   unfreeze_layer_names_startswith:
     #     - model.classifier.head
 data:
-  class_path: src.data.visiomel_datamodule.VisiomelTrainDatamodule
+  class_path: src.data.visiomel_datamodule.VisiomelTrainDatamoduleClassification
   init_args:
     data_dir_train: /workspace/data/images_page_5/
     img_size: 2048

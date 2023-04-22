@@ -170,6 +170,108 @@ class VisiomelTrainDatamodule(LightningDataModule):
         self.test_dataset: Optional[Dataset] = None
 
     def build_transforms(self):
+        """Build task-specific data transformations."""
+    
+    def setup(self, stage=None) -> None:
+        """Setup data."""
+
+    def train_dataloader(self) -> DataLoader:
+        sampler, shuffle = None, True
+        if self.hparams.sampler is not None and self.hparams.sampler == 'weighted_upsampling':
+            sampler = build_weighted_sampler(self.train_dataset)
+            shuffle = False
+        return DataLoader(
+            dataset=self.train_dataset, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory, 
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            sampler=sampler,
+            shuffle=shuffle
+        )
+
+    def val_dataloader(self) -> DataLoader:
+        val_dataloader = DataLoader(
+            dataset=self.val_dataset, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            shuffle=False
+        )
+        val_dataloader_downsampled = DataLoader(
+            dataset=self.val_dataset_downsampled, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            shuffle=False
+        )
+        return [val_dataloader, val_dataloader_downsampled]
+
+    def test_dataloader(self) -> DataLoader:
+        assert self.test_dataset is not None, "test dataset is not defined"
+        return DataLoader(
+            dataset=self.test_dataset, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            shuffle=False
+        )
+
+    def predict_dataloader(self) -> DataLoader:
+        return self.test_dataloader()
+
+
+class VisiomelTrainDatamoduleClassification(LightningDataModule):
+    def __init__(
+        self,
+        data_dir_train: str = './data/train',	
+        k: int = 5,
+        fold_index: int = 0,
+        data_dir_test: Optional[str] = None,
+        img_size: int = 224,
+        shrink_preview_scale: Optional[int] = None,
+        batch_size: int = 32,
+        split_seed: int = 0,
+        num_workers: int = 0,
+        num_workers_saturated: int = 0,
+        pin_memory: bool = False,
+        prefetch_factor: int = 2,
+        persistent_workers: bool = False,
+        sampler: Optional[str] = None,
+        enable_caching: bool = False,
+        data_shrinked: bool = False,
+        train_resize_type: str = 'resize',
+    ):
+        super().__init__(
+            data_dir_train=data_dir_train,
+            k=k,
+            fold_index=fold_index,
+            data_dir_test=data_dir_test,
+            img_size=img_size,
+            shrink_preview_scale=shrink_preview_scale,
+            batch_size=batch_size,
+            split_seed=split_seed,
+            num_workers=num_workers,
+            num_workers_saturated=num_workers_saturated,
+            pin_memory=pin_memory,
+            prefetch_factor=prefetch_factor,
+            persistent_workers=persistent_workers,
+            sampler=sampler,
+            enable_caching=enable_caching,
+            data_shrinked=data_shrinked,
+            train_resize_type=train_resize_type
+        )
+        self.save_hyperparameters()
+    
+    def build_transforms(self):
+        """Build task-specific data transformations."""
         if self.hparams.train_resize_type == 'resize':
             # Resize could be used for caching, so use it in pre_transform
             resize_transform_train = resize_transform_val = IdentityTransform()
@@ -227,6 +329,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
         self.test_transform = non_train_transform
 
     def setup(self, stage=None) -> None:
+        """Setup data."""
         if self.train_dataset is None and self.val_dataset is None:
             # Train & val dataset as k-th fold
             dataset = VisiomelImageFolder(
@@ -262,55 +365,3 @@ class VisiomelTrainDatamodule(LightningDataModule):
                 transform=self.test_transform, 
                 loader=loader_with_filepath
             )
-
-    def train_dataloader(self) -> DataLoader:
-        sampler, shuffle = None, True
-        if self.hparams.sampler is not None and self.hparams.sampler == 'weighted_upsampling':
-            sampler = build_weighted_sampler(self.train_dataset)
-            shuffle = False
-        return DataLoader(
-            dataset=self.train_dataset, 
-            batch_size=self.hparams.batch_size, 
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory, 
-            prefetch_factor=self.hparams.prefetch_factor,
-            persistent_workers=self.hparams.persistent_workers,
-            sampler=sampler,
-            shuffle=shuffle
-        )
-
-    def val_dataloader(self) -> DataLoader:
-        val_dataloader = DataLoader(
-            dataset=self.val_dataset, 
-            batch_size=self.hparams.batch_size, 
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            prefetch_factor=self.hparams.prefetch_factor,
-            persistent_workers=self.hparams.persistent_workers,
-            shuffle=False
-        )
-        val_dataloader_downsampled = DataLoader(
-            dataset=self.val_dataset_downsampled, 
-            batch_size=self.hparams.batch_size, 
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            prefetch_factor=self.hparams.prefetch_factor,
-            persistent_workers=self.hparams.persistent_workers,
-            shuffle=False
-        )
-        return [val_dataloader, val_dataloader_downsampled]
-
-    def test_dataloader(self) -> DataLoader:
-        assert self.test_dataset is not None, "test dataset is not defined"
-        return DataLoader(
-            dataset=self.test_dataset, 
-            batch_size=self.hparams.batch_size, 
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            prefetch_factor=self.hparams.prefetch_factor,
-            persistent_workers=self.hparams.persistent_workers,
-            shuffle=False
-        )
-
-    def predict_dataloader(self) -> DataLoader:
-        return self.test_dataloader()
