@@ -64,7 +64,7 @@ data:
     num_workers: 8
     num_workers_saturated: 8
     enable_caching: true
-    train_resize_type: resize
+    train_resize_type: random_crop
     mask_patch_size: 32
     model_patch_size: 4
     mask_ratio: 0.6
