@@ -55,6 +55,8 @@ data:
   class_path: src.data.visiomel_datamodule.VisiomelTrainDatamoduleSimMIM
   init_args:
     data_dir_train: /workspace/data/images_page_4_shrink/
+    k: 5
+    fold_index: 0
     img_size: 1536
     data_shrinked: true
     shrink_preview_scale: null
