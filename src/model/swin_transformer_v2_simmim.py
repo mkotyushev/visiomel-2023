@@ -182,10 +182,10 @@ class SwinTransformerV2SimMIM(VisiomelModel):
         """Update val metrics."""
         return
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.model(x)
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+        return self.model(x, mask)
     
     def compute_loss_preds(self, batch, *args, **kwargs):
         img, mask, _ = batch
-        loss = self.model(img, mask)
+        loss = self(img, mask)
         return loss, {'simmim': loss}, None
