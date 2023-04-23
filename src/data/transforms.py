@@ -89,7 +89,7 @@ def shrink_image(img, sizes, scale=None, fill=(0, 0, 0)):
   if img.ndim == 2:
     new_img = np.full((y_max, x_max), fill_value=np.mean(fill).astype(img.dtype), dtype=img.dtype)
   else:
-    new_img = np.full((y_max, x_max, img.shape[2]), fill_value=np.array(fill)[:, None, None], dtype=img.dtype)
+    new_img = np.full((y_max, x_max, img.shape[2]), fill_value=np.array(fill)[None, None, :], dtype=img.dtype)
 
   for (w, h), (x, y), (x_old, y_old, w_old, h_old) in zip(sizes, positions, contours_scaled):
     new_img[y: y + h, x: x + w] = img[y_old: y_old + h_old, x_old: x_old + w_old]
@@ -131,3 +131,35 @@ class CenterCropPct(CenterCrop):
             crop_size = int(img.size[-1] * self.size[1]), int(img.size[-2] * self.size[0])
         result = F.center_crop(img, crop_size)
         return result
+
+
+class SimMIMTransform:
+    def __init__(self, mask_generator):
+        self.mask_generator = mask_generator
+
+    def __call__(self, img):
+        mask = self.mask_generator()
+        return img, mask
+
+
+# https://discuss.pytorch.org/t/torchvision-transforms-set-fillcolor-for-centercrop/98098/2
+class PadCenterCrop(object):
+    def __init__(self, size, pad_if_needed=False, fill=0, padding_mode='constant'):
+        if isinstance(size, (int, float)):
+            self.size = (int(size), int(size))
+        else:
+            self.size = size
+        self.pad_if_needed = pad_if_needed
+        self.padding_mode = padding_mode
+        self.fill = fill
+
+    def __call__(self, img):
+
+        # pad the width if needed
+        if self.pad_if_needed and img.size[0] < self.size[1]:
+            img = F.pad(img, (self.size[1] - img.size[0], 0), self.fill, self.padding_mode)
+        # pad the height if needed
+        if self.pad_if_needed and img.size[1] < self.size[0]:
+            img = F.pad(img, (0, self.size[0] - img.size[1]), self.fill, self.padding_mode)
+
+        return F.center_crop(img, self.size)

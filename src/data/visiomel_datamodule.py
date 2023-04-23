@@ -24,7 +24,7 @@ from torchvision.transforms import (
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torch.utils.data._utils.collate import default_collate
 
-from src.data.transforms import Shrink, CenterCropPct
+from src.data.transforms import Shrink, CenterCropPct, SimMIMTransform, PadCenterCrop
 from src.utils.utils import loader_with_filepath
 
 
@@ -430,38 +430,6 @@ class MaskGenerator:
         mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
         
         return mask
-
-
-class SimMIMTransform:
-    def __init__(self, mask_generator):
-        self.mask_generator = mask_generator
-
-    def __call__(self, img):
-        mask = self.mask_generator()
-        return img, mask
-
-
-# https://discuss.pytorch.org/t/torchvision-transforms-set-fillcolor-for-centercrop/98098/2
-class PadCenterCrop(object):
-    def __init__(self, size, pad_if_needed=False, fill=0, padding_mode='constant'):
-        if isinstance(size, (int, float)):
-            self.size = (int(size), int(size))
-        else:
-            self.size = size
-        self.pad_if_needed = pad_if_needed
-        self.padding_mode = padding_mode
-        self.fill = fill
-
-    def __call__(self, img):
-
-        # pad the width if needed
-        if self.pad_if_needed and img.size[0] < self.size[1]:
-            img = F.pad(img, (self.size[1] - img.size[0], 0), self.fill, self.padding_mode)
-        # pad the height if needed
-        if self.pad_if_needed and img.size[1] < self.size[0]:
-            img = F.pad(img, (0, self.size[0] - img.size[1]), self.fill, self.padding_mode)
-
-        return F.center_crop(img, self.size)
 
 
 class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
