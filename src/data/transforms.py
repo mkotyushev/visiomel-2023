@@ -1,7 +1,9 @@
 import cv2
+import math
 import numpy as np
 import rpack
 import torchvision.transforms.functional as F
+from torch import Tensor
 from functools import cache
 from PIL import Image
 from histolab.filters.compositions import FiltersComposition
@@ -163,3 +165,70 @@ class PadCenterCrop(object):
             img = F.pad(img, (0, self.size[0] - img.size[1]), self.fill, self.padding_mode)
 
         return F.center_crop(img, self.size)
+
+
+def generate_patch_bboxes(img_size: tuple, patch_size: tuple):
+    """Generator for possibly overlapping patch bounding boxes.
+    such that there is img_size[i] // patch_size[i] (if img_size[i] 
+    is divisible by patch_size[i]) or img_size[i] // patch_size[i] + 1 
+    patches in each dimension.
+    """
+    assert len(img_size) == 2 and len(patch_size) == 2
+    assert img_size[0] >= patch_size[0] and img_size[1] >= patch_size[1]
+    
+    if img_size[0] % patch_size[0] == 0:
+        h_stride = patch_size[0]
+        h_steps = img_size[0] // patch_size[0]
+    else:
+        h_stride = math.floor(
+            patch_size[0] - 
+            (patch_size[0] - img_size[0] % patch_size[0]) / 
+            (img_size[0] // patch_size[0])
+        )
+        h_steps = img_size[0] // patch_size[0] + 1
+    
+    if img_size[1] % patch_size[1] == 0:
+        w_stride = patch_size[1]
+        w_steps = img_size[1] // patch_size[1]
+    else:
+        w_stride = math.floor(
+            patch_size[1] - 
+            (patch_size[1] - img_size[1] % patch_size[1]) / 
+            (img_size[1] // patch_size[1]))
+        w_steps = img_size[1] // patch_size[1] + 1
+    
+    for h_index in range(h_steps):
+        for w_index in range(w_steps):
+            h_start = h_index * h_stride
+            w_start = w_index * w_stride
+            h_end = min(h_start + patch_size[0], img_size[0])
+            w_end = min(w_start + patch_size[1], img_size[1])
+            yield (h_start, h_end, w_start, w_end)
+
+
+def generate_tensor_patches(img: Tensor, patch_size: tuple, fill: float):
+    """Generator for possibly overlapping patch bounding boxes.
+    such that there is img_size[i] // patch_size[i] (if img_size[i] 
+    is divisible by patch_size[i]) or img_size[i] // patch_size[i] + 1 
+    patches in each dimension.
+    """
+    assert len(img.shape) == 4, "Image must be a 4D tensor"
+    assert len(patch_size) == 2, "Patch size must be a 2-tuple"
+
+    B, C, H, W = img.shape
+
+    # If the image is smaller than the patch size, center pad
+    if H < patch_size[0]:
+        pad_down = (patch_size[0] - img.shape[0]) // 2
+        pad_up = patch_size[0] - img.shape[0] - pad_down
+        img = F.pad(img, (pad_up, pad_down), mode='constant', value=fill)
+    if W < patch_size[1]:
+        pad_right = (patch_size[1] - img.shape[1]) // 2
+        pad_left = patch_size[1] - img.shape[1] - pad_right
+        img = F.pad(img, (pad_left, pad_right), mode='constant', value=fill)
+
+    # Generate patches
+    img_size = img.shape[2:4]
+    for bbox in generate_patch_bboxes(img_size, patch_size):
+        h_start, h_end, w_start, w_end = bbox
+        yield img[:, :, h_start:h_end, w_start:w_end]
