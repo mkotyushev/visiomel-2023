@@ -87,9 +87,9 @@ def shrink_image(img, sizes, scale=None, fill=(0, 0, 0)):
   sizes, positions, contours_scaled, x_max, y_max = sizes
   img = np.array(img)
   if img.ndim == 2:
-    new_img = np.full((y_max, x_max), fill_value=fill[:2], dtype=img.dtype)
+    new_img = np.full((y_max, x_max), fill_value=np.mean(fill).astype(img.dtype), dtype=img.dtype)
   else:
-    new_img = np.full((y_max, x_max, img.shape[2]), fill_value=fill, dtype=img.dtype)
+    new_img = np.full((y_max, x_max, img.shape[2]), fill_value=np.array(fill)[:, None, None], dtype=img.dtype)
 
   for (w, h), (x, y), (x_old, y_old, w_old, h_old) in zip(sizes, positions, contours_scaled):
     new_img[y: y + h, x: x + w] = img[y_old: y_old + h_old, x_old: x_old + w_old]
