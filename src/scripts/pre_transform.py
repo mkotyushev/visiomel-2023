@@ -28,10 +28,11 @@ if args.img_size is None:
         ]
     )
 else:
+    img_mean = (238, 231, 234)
     pre_transform = Compose(
         [
             CenterCropPct(size=(0.9, 0.9)),
-            Shrink(scale=args.scale),
+            Shrink(scale=args.scale, fill=img_mean),
             Resize(size=(args.img_size, args.img_size)),
         ]
     )

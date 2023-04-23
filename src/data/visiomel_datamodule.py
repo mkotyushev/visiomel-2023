@@ -2,6 +2,7 @@ import logging
 import random
 import numpy as np
 import torch
+import torchvision.transforms.functional as F
 from collections import Counter, defaultdict
 from copy import deepcopy
 from multiprocessing import Manager
@@ -440,6 +441,29 @@ class SimMIMTransform:
         return img, mask
 
 
+# https://discuss.pytorch.org/t/torchvision-transforms-set-fillcolor-for-centercrop/98098/2
+class PadCenterCrop(object):
+    def __init__(self, size, pad_if_needed=False, fill=0, padding_mode='constant'):
+        if isinstance(size, (int, float)):
+            self.size = (int(size), int(size))
+        else:
+            self.size = size
+        self.pad_if_needed = pad_if_needed
+        self.padding_mode = padding_mode
+        self.fill = fill
+
+    def __call__(self, img):
+
+        # pad the width if needed
+        if self.pad_if_needed and img.size[0] < self.size[1]:
+            img = F.pad(img, (self.size[1] - img.size[0], 0), self.fill, self.padding_mode)
+        # pad the height if needed
+        if self.pad_if_needed and img.size[1] < self.size[0]:
+            img = F.pad(img, (0, self.size[0] - img.size[1]), self.fill, self.padding_mode)
+
+        return F.center_crop(img, self.size)
+
+
 class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     def __init__(
         self,
@@ -448,7 +472,6 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
         fold_index: int = 0,
         data_dir_test: Optional[str] = None,
         img_size: int = 224,
-        n_outer_splits = None,
         shrink_preview_scale: Optional[int] = None,
         batch_size: int = 32,
         split_seed: int = 0,
@@ -495,56 +518,83 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     
     def build_transforms(self):
         """Build task-specific data transformations."""
-        assert self.hparams.train_resize_type == 'resize'
-
-        if self.hparams.n_outer_splits is None:
-            resize_transform_pre_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
-        else:
-            resize_transform_pre_transform = Resize(
-                size=(
-                    self.hparams.n_outer_splits * self.hparams.img_size, 
-                    self.hparams.n_outer_splits * self.hparams.img_size
+        pre_resize_transform, train_resize_transform, val_resize_transform = \
+            IdentityTransform(), IdentityTransform(), IdentityTransform()
+        if self.hparams.train_resize_type == 'resize':
+            # - resize to img_size in pretransform
+            # - do nothing on train
+            # - do nothing on val
+            pre_resize_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
+            train_resize_transform = val_resize_transform = IdentityTransform()
+        elif self.hparams.train_resize_type == 'random_crop':
+            img_mean = (238, 231, 234)  # from all train data
+            # - do nothing in pretransform
+            # - random crop to img_size on train
+            # - center crop to img_size on val
+            
+            # Note: here crops could lead to empty areas, 
+            # so padding is needed.
+            
+            # Note: image size after pretransform is rather large,
+            # so caching probably is not possible.
+            
+            # Note: reflective padding is dataleak for SimMIM
+            # and could not be used here
+            # but not for classification.
+            if self.hparams.enable_caching:
+                logger.warning(
+                    'Caching is enabled with large images. '
+                    'Consider using "resize" train_resize_type.'
                 )
+            pre_resize_transform = IdentityTransform()
+            train_resize_transform = RandomCrop(
+                size=(self.hparams.img_size, self.hparams.img_size),
+                pad_if_needed=True,
+                padding_mode='constant',
+                fill=img_mean
+            )
+            val_resize_transform = PadCenterCrop(
+                size=(self.hparams.img_size, self.hparams.img_size),
+                pad_if_needed=True,
+                padding_mode='constant',
+                fill=img_mean
             )
 
         if self.hparams.data_shrinked:
-            self.pre_transform = resize_transform_pre_transform
+            self.pre_transform = pre_resize_transform
         else:
-            img_mean = (238, 231, 234)  # from all train data
             self.pre_transform = Compose(
                 [
                     CenterCropPct(size=(0.9, 0.9)),
                     Shrink(scale=self.hparams.shrink_preview_scale, fill=img_mean),
-                    resize_transform_pre_transform,
+                    pre_resize_transform,
                 ]
             )
 
-        train_crop_transform, val_crop_transform = IdentityTransform(), IdentityTransform()
-        if self.hparams.n_outer_splits is not None:
-            train_crop_transform = RandomCrop(size=(self.hparams.img_size, self.hparams.img_size))
-            val_crop_transform = CenterCrop(size=(self.hparams.img_size, self.hparams.img_size))
-
         self.train_transform = Compose(
             [
-                train_crop_transform,
+                train_resize_transform,
                 RandomHorizontalFlip(),
                 ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
                 SimMIMTransform(self.mask_generator),
             ]
         )
         self.val_transform = Compose(
             [
-                val_crop_transform,
+                val_resize_transform,
                 ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
                 SimMIMTransform(self.mask_generator),
             ]
         )
-        self.transform_no_random = Compose(
+
+        # Raw images (no test or val cropping / resizing, only pretransform) here, 
+        # so it could be done later
+        self.train_transform_no_random = Compose(
             [
                 ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
             ]
         )
 
@@ -590,7 +640,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 self.hparams.data_dir_train, 
                 shared_cache=self.shared_cache,
                 pre_transform=self.pre_transform,
-                transform=self.transform_no_random, 
+                transform=self.train_transform_no_random, 
                 loader=loader_with_filepath
             )
 
