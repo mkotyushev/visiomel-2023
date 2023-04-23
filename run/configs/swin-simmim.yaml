@@ -61,9 +61,10 @@ data:
     data_shrinked: true
     shrink_preview_scale: null
     batch_size: 1
-    num_workers: 8
-    num_workers_saturated: 8
-    enable_caching: true
+    num_workers: 10
+    num_workers_saturated: 10
+    prefetch_factor: 4
+    enable_caching: false
     train_resize_type: random_crop
     mask_patch_size: 32
     model_patch_size: 4
