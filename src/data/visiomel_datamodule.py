@@ -88,8 +88,15 @@ def build_weighted_sampler(dataset):
             dataset.subset.dataset.targets[index] 
             for index in dataset.subset.indices
         ]
-    else:
+    elif isinstance(dataset, Subset):
+        targets = [
+            dataset.dataset.targets[index] 
+            for index in dataset.indices
+        ]
+    elif isinstance(dataset, ImageFolder):
         targets = dataset.targets
+    else:
+        raise ValueError(f"Unsupported dataset type: {type(dataset)}")
     
     target_counter = Counter(targets)
     class_weights = {k: 1 / v for k, v in target_counter.items()}
@@ -514,7 +521,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
         """Setup data."""
         super().setup(stage)
         if self.train_dataset is None:
-            self.train_dataset = VisiomelImageFolder(
+            dataset = VisiomelImageFolder(
                 self.hparams.data_dir_train, 
                 shared_cache=self.shared_cache,
                 pre_transform=self.pre_transform,
@@ -522,8 +529,30 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 loader=loader_with_filepath
             )
 
+            kfold = StratifiedKFold(
+                n_splits=self.hparams.k, 
+                shuffle=True, 
+                random_state=self.hparams.split_seed
+            )
+            split = list(kfold.split(dataset, dataset.targets))
+            train_indices, val_indices = split[self.hparams.fold_index]
+
+            self.train_dataset, self.val_dataset = \
+                Subset(dataset, train_indices), Subset(dataset, val_indices)
+
+
     def val_dataloader(self) -> DataLoader:
-        return None
+        val_dataloader = DataLoader(
+            dataset=self.val_dataset, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            collate_fn=self.collate_fn,
+            shuffle=False
+        )
+        return val_dataloader
     
     def test_dataloader(self) -> DataLoader:
         return None
