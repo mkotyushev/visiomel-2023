@@ -1,11 +1,13 @@
 trainer:
+  # limit_train_batches: 10
+  # limit_val_batches: 10
   max_epochs: 10
-  limit_val_batches: 0
   num_sanity_val_steps: 0
   accumulate_grad_batches: 32
   reload_dataloaders_every_n_epochs: 0
   log_every_n_steps: 1
   gradient_clip_val: 20
+  check_val_every_n_epoch: 1
   callbacks:
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
       init_args:
@@ -13,10 +15,10 @@ trainer:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
         save_top_k: 1
-        monitor: train_loss_simmim
+        monitor: val_loss_simmim
         every_n_epochs: 1
         mode: min
-        save_on_train_epoch_end: true
+        save_on_train_epoch_end: false
         save_last: true
 model:
   class_path: src.model.swin_transformer_v2_simmim.SwinTransformerV2SimMIM
@@ -57,8 +59,8 @@ data:
     data_shrinked: true
     shrink_preview_scale: null
     batch_size: 1
-    num_workers: 8
-    num_workers_saturated: 8
+    num_workers: 4
+    num_workers_saturated: 4
     enable_caching: true
     train_resize_type: resize
     mask_patch_size: 32
