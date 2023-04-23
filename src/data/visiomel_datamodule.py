@@ -508,7 +508,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 ]
             )
 
-        self.transform = Compose(
+        self.train_transform = Compose(
             [
                 RandomHorizontalFlip(),
                 ToTensor(),
@@ -516,20 +516,33 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 SimMIMTransform(self.mask_generator),
             ]
         )
+        self.val_transform = Compose(
+            [
+                ToTensor(),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                SimMIMTransform(self.mask_generator),
+            ]
+        )
+        self.transform_no_random = Compose(
+            [
+                ToTensor(),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
+            ]
+        )
 
     def setup(self, stage=None) -> None:
         """Setup data."""
         super().setup(stage)
         if self.train_dataset is None:
-            dataset = VisiomelImageFolder(
-                self.hparams.data_dir_train, 
-                shared_cache=self.shared_cache,
-                pre_transform=self.pre_transform,
-                transform=self.transform, 
-                loader=loader_with_filepath
-            )
-
+            # Train dataset
             if self.hparams.k is not None:
+                dataset = VisiomelImageFolder(
+                    self.hparams.data_dir_train, 
+                    shared_cache=self.shared_cache,
+                    pre_transform=self.pre_transform,
+                    transform=None, 
+                    loader=loader_with_filepath
+                )
                 kfold = StratifiedKFold(
                     n_splits=self.hparams.k, 
                     shuffle=True, 
@@ -538,10 +551,30 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 split = list(kfold.split(dataset, dataset.targets))
                 train_indices, val_indices = split[self.hparams.fold_index]
 
-                self.train_dataset, self.val_dataset = \
+                train_subset, val_subset = \
                     Subset(dataset, train_indices), Subset(dataset, val_indices)
+                
+                self.train_dataset, self.val_dataset = \
+                    SubsetDataset(train_subset, transform=self.train_transform), \
+                    SubsetDataset(val_subset, transform=self.val_transform)
+                self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
             else:
-                self.train_dataset = dataset
+                self.train_dataset = VisiomelImageFolder(
+                    self.hparams.data_dir_train, 
+                    shared_cache=self.shared_cache,
+                    pre_transform=self.pre_transform,
+                    transform=self.train_transform, 
+                    loader=loader_with_filepath
+                )
+
+            # Train dataset, but without random transforms
+            self.train_dataset_no_random = VisiomelImageFolder(
+                self.hparams.data_dir_train, 
+                shared_cache=self.shared_cache,
+                pre_transform=self.pre_transform,
+                transform=self.transform_no_random, 
+                loader=loader_with_filepath
+            )
 
     def val_dataloader(self) -> DataLoader:
         val_dataloader = DataLoader(
@@ -558,3 +591,16 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     
     def test_dataloader(self) -> DataLoader:
         return None
+    
+    def train_dataloader_no_random(self) -> DataLoader:
+        dataloader = DataLoader(
+            dataset=self.train_dataset_no_random, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            collate_fn=self.collate_fn,
+            shuffle=False
+        )
+        return dataloader
