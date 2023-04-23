@@ -170,7 +170,7 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
         # num_splits = 10 means our dataset will be split to 10 parts
         # so we train on 90% of the data and validate on 10%
-        assert 0 <= fold_index < k, "incorrect fold number"
+        assert k is None or (0 <= fold_index < k), "incorrect fold number"
         
         # Caching
         self.shared_cache = None
@@ -444,7 +444,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     def __init__(
         self,
         data_dir_train: str = './data/train',	
-        k: int = 5,
+        k: int = None,
         fold_index: int = 0,
         data_dir_test: Optional[str] = None,
         img_size: int = 224,
@@ -529,16 +529,19 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                 loader=loader_with_filepath
             )
 
-            kfold = StratifiedKFold(
-                n_splits=self.hparams.k, 
-                shuffle=True, 
-                random_state=self.hparams.split_seed
-            )
-            split = list(kfold.split(dataset, dataset.targets))
-            train_indices, val_indices = split[self.hparams.fold_index]
+            if self.hparams.k is not None:
+                kfold = StratifiedKFold(
+                    n_splits=self.hparams.k, 
+                    shuffle=True, 
+                    random_state=self.hparams.split_seed
+                )
+                split = list(kfold.split(dataset, dataset.targets))
+                train_indices, val_indices = split[self.hparams.fold_index]
 
-            self.train_dataset, self.val_dataset = \
-                Subset(dataset, train_indices), Subset(dataset, val_indices)
+                self.train_dataset, self.val_dataset = \
+                    Subset(dataset, train_indices), Subset(dataset, val_indices)
+            else:
+                self.train_dataset = dataset
 
     def val_dataloader(self) -> DataLoader:
         val_dataloader = DataLoader(
