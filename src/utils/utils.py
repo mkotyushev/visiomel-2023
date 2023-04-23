@@ -279,11 +279,11 @@ def extract_features(model, dataloader, last_only=False):
             x, mask, y = batch
         # with torch.no_grad():
         with torch.no_grad():
-            x, y = x.cuda(), y.cuda()
+            x, y = x.cuda(), y.detach().cpu()
             if last_only:
-                features = extract_features_last_only_single(model, x)
+                features = extract_features_last_only_single(model, x).detach().cpu()
             else:
-                features = extract_features_single(model, x)
+                features = extract_features_single(model, x).detach().cpu()
             features_all.append(features)
             y_all.append(y)
 
