@@ -448,6 +448,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
         fold_index: int = 0,
         data_dir_test: Optional[str] = None,
         img_size: int = 224,
+        n_outer_splits = None,
         shrink_preview_scale: Optional[int] = None,
         batch_size: int = 32,
         split_seed: int = 0,
@@ -495,21 +496,37 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     def build_transforms(self):
         """Build task-specific data transformations."""
         assert self.hparams.train_resize_type == 'resize'
-        resize_transform_pre_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
+
+        if self.hparams.n_outer_splits is None:
+            resize_transform_pre_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
+        else:
+            resize_transform_pre_transform = Resize(
+                size=(
+                    self.hparams.n_outer_splits * self.hparams.img_size, 
+                    self.hparams.n_outer_splits * self.hparams.img_size
+                )
+            )
 
         if self.hparams.data_shrinked:
             self.pre_transform = resize_transform_pre_transform
         else:
+            img_mean = (238, 231, 234)  # from all train data
             self.pre_transform = Compose(
                 [
                     CenterCropPct(size=(0.9, 0.9)),
-                    Shrink(scale=self.hparams.shrink_preview_scale),
+                    Shrink(scale=self.hparams.shrink_preview_scale, fill=img_mean),
                     resize_transform_pre_transform,
                 ]
             )
 
+        train_crop_transform, val_crop_transform = IdentityTransform(), IdentityTransform()
+        if self.hparams.n_outer_splits is not None:
+            train_crop_transform = RandomCrop(size=(self.hparams.img_size, self.hparams.img_size))
+            val_crop_transform = CenterCrop(size=(self.hparams.img_size, self.hparams.img_size))
+
         self.train_transform = Compose(
             [
+                train_crop_transform,
                 RandomHorizontalFlip(),
                 ToTensor(),
                 Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
@@ -518,6 +535,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
         )
         self.val_transform = Compose(
             [
+                val_crop_transform,
                 ToTensor(),
                 Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD)),
                 SimMIMTransform(self.mask_generator),

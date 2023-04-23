@@ -7,7 +7,7 @@ from PIL import Image
 from histolab.filters.compositions import FiltersComposition
 from histolab.slide import Slide
 from torchvision.transforms import CenterCrop
-from typing import Optional
+from typing import Optional, Tuple
 
 
 def build_contours_by_mask(mask):
@@ -83,13 +83,13 @@ def build_shink_size_and_positions(img, scale=None):
   return sizes, positions, contours_scaled, x_max, y_max
 
 
-def shrink_image(img, sizes, scale=None):
+def shrink_image(img, sizes, scale=None, fill=(0, 0, 0)):
   sizes, positions, contours_scaled, x_max, y_max = sizes
   img = np.array(img)
   if img.ndim == 2:
-    new_img = np.zeros((y_max, x_max), dtype=img.dtype)
+    new_img = np.full((y_max, x_max), fill_value=fill[:2], dtype=img.dtype)
   else:
-    new_img = np.zeros((y_max, x_max, img.shape[2]), dtype=img.dtype)
+    new_img = np.full((y_max, x_max, img.shape[2]), fill_value=fill, dtype=img.dtype)
 
   for (w, h), (x, y), (x_old, y_old, w_old, h_old) in zip(sizes, positions, contours_scaled):
     new_img[y: y + h, x: x + w] = img[y_old: y_old + h_old, x_old: x_old + w_old]
@@ -98,13 +98,14 @@ def shrink_image(img, sizes, scale=None):
 
 
 class Shrink:
-    def __init__(self, scale: Optional[int] = None):
+    def __init__(self, scale: Optional[int] = None, fill: Tuple[int] = (0, 0, 0)):
         self.scale = scale
+        self.fill = fill
 
     def __call__(self, img: Image.Image) -> Image.Image:
         try:
           sizes = build_shink_size_and_positions(img, self.scale)
-          img_shrinked = shrink_image(img, sizes, self.scale)
+          img_shrinked = shrink_image(img, sizes, self.scale, self.fill)
         except ValueError as e:
           img_shrinked = img
 
