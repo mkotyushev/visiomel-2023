@@ -6,6 +6,7 @@ import logging
 import timm
 import torch
 import torch.nn.functional as F
+import pandas as pd
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
@@ -15,6 +16,8 @@ from model.patch_embed_with_backbone import SwinTransformerV2Modded
 from torchmetrics import Metric
 from mock import patch
 from sklearn.metrics import log_loss
+from tqdm import tqdm
+from sklearn.preprocessing import OneHotEncoder
 
 
 logger = logging.getLogger(__name__)
@@ -245,3 +248,64 @@ class LogLossScore(Metric):
         self.preds = torch.softmax(torch.cat(self.preds, dim=0), dim=1)
         self.target = torch.cat(self.target, dim=0)
         return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy(), eps=1e-16).item()
+
+
+def extract_features_single(model, x):
+    x = model.patch_embed(x)
+    if model.absolute_pos_embed is not None:
+        x = x + model.absolute_pos_embed
+    x = model.pos_drop(x)
+
+    features = [x.mean(dim=1)]
+    for layer in model.layers:
+        x = layer(x)
+        features.append(x.mean(dim=1))
+    features[-1] = model.norm(features[-1])
+    features = torch.cat(features, dim=1)
+
+    return features
+
+
+def extract_features(model, dataloader):
+    features_all, y_all = [], []
+    for batch in tqdm(dataloader):
+        if len(batch) == 2:
+            x, y = batch
+        elif len(batch) == 3:
+            x, mask, y = batch
+        # with torch.no_grad():
+        with torch.no_grad(), torch.autocast(device_type='cuda', dtype=torch.float16):
+            x, y = x.cuda(), y.cuda()
+            features = extract_features_single(model, x)
+            features_all.append(features)
+            y_all.append(y)
+
+    features_all = torch.cat(features_all, dim=0)
+    y_all = torch.cat(y_all, dim=0)
+
+    return features_all, y_all
+
+
+def preprocess_meta(df):
+    # keep age	sex	body_site	melanoma_history	resolution cols
+    df = df.drop(columns=df.columns.difference(['age', 'sex', 'body_site', 'melanoma_history', 'resolution']))
+
+    # Convert to float
+    df['age'] = df['age'].apply(lambda x: x.split(':')[0][1:]).astype(float)
+
+    # One-hot encode
+    onehot_features_cols = ['sex', 'body_site', 'melanoma_history']
+
+    onehot_encoder = OneHotEncoder(handle_unknown='ignore')
+    onehot_encoder.fit(df[onehot_features_cols].values)
+    onehot_encoded = onehot_encoder.transform(df[onehot_features_cols].values).toarray()
+    onehot_encoded_df = pd.DataFrame(onehot_encoded, columns=onehot_encoder.get_feature_names_out(onehot_features_cols))
+    df = pd.concat([df, onehot_encoded_df], axis=1)
+    df = df.drop(columns=onehot_features_cols)
+
+    # Normalize non-one-hot-encoded features
+    seq_features_cols = ['age', 'resolution']
+    for col in seq_features_cols:
+        df[col] = (df[col] - df[col].mean()) / df[col].std()
+    
+    return df
