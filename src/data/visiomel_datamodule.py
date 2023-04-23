@@ -6,7 +6,7 @@ import torchvision.transforms.functional as F
 from collections import Counter, defaultdict
 from copy import deepcopy
 from multiprocessing import Manager
-from typing import Optional
+from typing import List, Optional, Union
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
@@ -559,7 +559,7 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
 
         # Raw images (no test or val cropping / resizing, only pretransform) here, 
         # so it could be done later
-        self.train_transform_no_random = Compose(
+        self.transform_no_random = Compose(
             [
                 ToTensor(),
                 Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
@@ -603,12 +603,19 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
                     loader=loader_with_filepath
                 )
 
-            # Train dataset, but without random transforms
+            # Train & val dataset, but without random and resize transforms
             self.train_dataset_no_random = VisiomelImageFolder(
                 self.hparams.data_dir_train, 
                 shared_cache=self.shared_cache,
                 pre_transform=self.pre_transform,
-                transform=self.train_transform_no_random, 
+                transform=self.transform_no_random, 
+                loader=loader_with_filepath
+            )
+            self.val_dataset_no_random = VisiomelImageFolder(
+                self.hparams.data_dir_train, 
+                shared_cache=self.shared_cache,
+                pre_transform=self.pre_transform,
+                transform=self.transform_no_random, 
                 loader=loader_with_filepath
             )
 
@@ -628,8 +635,8 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
     def test_dataloader(self) -> DataLoader:
         return None
     
-    def train_dataloader_no_random(self) -> DataLoader:
-        dataloader = DataLoader(
+    def train_val_dataloaders_no_random(self) -> Union[DataLoader, List[DataLoader]]:
+        train_dataloader = DataLoader(
             dataset=self.train_dataset_no_random, 
             batch_size=self.hparams.batch_size, 
             num_workers=self.hparams.num_workers,
@@ -639,4 +646,17 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
             collate_fn=self.collate_fn,
             shuffle=False
         )
-        return dataloader
+        if self.hparams.k is None:
+            return train_dataloader
+        else:
+            val_dataloader = DataLoader(
+                dataset=self.val_dataset_no_random, 
+                batch_size=self.hparams.batch_size, 
+                num_workers=self.hparams.num_workers,
+                pin_memory=self.hparams.pin_memory,
+                prefetch_factor=self.hparams.prefetch_factor,
+                persistent_workers=self.hparams.persistent_workers,
+                collate_fn=self.collate_fn,
+                shuffle=False
+            )
+            return train_dataloader, val_dataloader
