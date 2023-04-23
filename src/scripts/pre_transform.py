@@ -20,15 +20,15 @@ parser.add_argument('--scale', type=int, help='Preview scale for shrink transfor
 parser.add_argument('--img-size', type=int, default=None, help='Resize to that size (squared) as last transform')
 args = parser.parse_args()
 
+img_mean = (238, 231, 234)
 if args.img_size is None:
     pre_transform = Compose(
         [
             CenterCropPct(size=(0.9, 0.9)),
-            Shrink(scale=args.scale),
+            Shrink(scale=args.scale, fill=img_mean),
         ]
     )
 else:
-    img_mean = (238, 231, 234)
     pre_transform = Compose(
         [
             CenterCropPct(size=(0.9, 0.9)),
