@@ -540,7 +540,6 @@ class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
             self.train_dataset, self.val_dataset = \
                 Subset(dataset, train_indices), Subset(dataset, val_indices)
 
-
     def val_dataloader(self) -> DataLoader:
         val_dataloader = DataLoader(
             dataset=self.val_dataset, 

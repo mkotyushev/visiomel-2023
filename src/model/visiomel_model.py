@@ -96,7 +96,9 @@ class VisiomelModel(LightningModule):
     
     def validation_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None, **kwargs) -> Tensor:
         total_loss, losses, preds = self.compute_loss_preds(batch, **kwargs)
-        val_dataloader_name = 'val' if dataloader_idx == 0 else 'val_ds'
+        val_dataloader_name = 'val' 
+        if dataloader_idx is not None and dataloader_idx == 1:
+            val_dataloader_name = 'val_ds'
         for loss_name, loss in losses.items():
             self.log(
                 f'{val_dataloader_name}_loss_{loss_name}', 
