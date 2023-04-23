@@ -59,8 +59,8 @@ data:
     data_shrinked: true
     shrink_preview_scale: null
     batch_size: 1
-    num_workers: 4
-    num_workers_saturated: 4
+    num_workers: 8
+    num_workers_saturated: 8
     enable_caching: true
     train_resize_type: resize
     mask_patch_size: 32
