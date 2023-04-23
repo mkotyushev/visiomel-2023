@@ -250,6 +250,10 @@ class LogLossScore(Metric):
         return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy(), eps=1e-16).item()
 
 
+def extract_features_last_only_single(model, x):
+    return model.forward_features(x)
+
+
 def extract_features_single(model, x):
     x = model.patch_embed(x)
     if model.absolute_pos_embed is not None:
@@ -266,7 +270,7 @@ def extract_features_single(model, x):
     return features
 
 
-def extract_features(model, dataloader):
+def extract_features(model, dataloader, last_only=False):
     features_all, y_all = [], []
     for batch in tqdm(dataloader):
         if len(batch) == 2:
@@ -276,7 +280,10 @@ def extract_features(model, dataloader):
         # with torch.no_grad():
         with torch.no_grad(), torch.autocast(device_type='cuda', dtype=torch.float16):
             x, y = x.cuda(), y.cuda()
-            features = extract_features_single(model, x)
+            if last_only:
+                features = extract_features_last_only_single(model, x)
+            else:
+                features = extract_features_single(model, x)
             features_all.append(features)
             y_all.append(y)
 
