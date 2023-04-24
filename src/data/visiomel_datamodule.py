@@ -45,11 +45,12 @@ class SubsetDataset(Dataset):
 
         samples = []
         for _ in range(self.n_repeats):
-            if self.transform:
-                x = (self.transform(sample[0]), *sample[1:])
-            else:
-                x = sample
-            samples.append(x)
+            for sample in self.subset[index]:
+                if self.transform:
+                    x = (self.transform(sample[0]), *sample[1:])
+                else:
+                    x = sample
+                samples.append(x)
             
         return samples
         
@@ -93,8 +94,12 @@ class VisiomelImageFolder(ImageFolder):
         for _ in range(self.n_repeats):
             if self.transform is not None:
                 x = self.transform(sample)
+            else:
+                x = sample
             if self.target_transform is not None:
                 y = self.target_transform(target)
+            else:
+                y = target
 
             samples.append((x, y, path))
 
@@ -248,7 +253,7 @@ class VisiomelDatamodule(LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
 
-        self.collate_fn = simmim_collate_fn if task == 'simmim' else default_collate
+        self.collate_fn = simmim_collate_fn if task in ['simmim', 'simmim_randaug'] else default_collate
     
     def build_transforms(self):
         """Build data transformations."""
@@ -366,7 +371,8 @@ class VisiomelDatamodule(LightningDataModule):
                     shared_cache=self.shared_cache,
                     pre_transform=self.pre_transform,
                     transform=None, 
-                    loader=loader_with_filepath
+                    loader=loader_with_filepath,
+                    n_repeats=1,
                 )
                 kfold = StratifiedKFold(
                     n_splits=self.hparams.k, 
