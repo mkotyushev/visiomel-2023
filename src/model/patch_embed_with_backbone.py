@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from munch import Munch
 from timm.models.layers import PatchEmbed
 from timm.models.swin_transformer_v2 import SwinTransformerV2
+from data.transforms import generate_tensor_patches
 
 from model.quadtree_embedding import QuadtreeEmbedding
 from model.drloc.aux_modules import DenseRelativeLoc
@@ -34,7 +35,7 @@ def build_drloc(params):
 
 class PatchBackbone(nn.Module):
     """Apply backbone network to each patch."""
-    def __init__(self, backbone, patch_size=16, embed_dim=768):
+    def __init__(self, backbone, patch_size=16, embed_dim=768, patch_batch_size=1, fill=0):
         super().__init__()
         self.backbone = backbone
         self.patch_size = patch_size
@@ -42,27 +43,28 @@ class PatchBackbone(nn.Module):
             self.linear = nn.Linear(backbone.num_features, embed_dim)
         else:
             self.linear = nn.Identity()
+        self.patch_batch_size = patch_batch_size
+        self.fill = fill
     
     def forward(self, x):
         B, C, H, W = x.shape
         P = self.patch_size
         
-        # Crop to patch size multiplier as in PatchEmbed
-        x = x[:, :H // P * P, :W // P * P]
-        
-        # Extract patches
-        x = x \
-            .unfold(2, P, P) \
-            .unfold(3, P, P)
-        
-        # Concat to batch dimension
-        # (B, C, H_patches, W_patches, patch_size, patch_size) -> 
-        # (B * H_patches * W_patches, C, patch_size, patch_size)
-        H_patches, W_patches = x.shape[2:4]
-        x = x.reshape(B * H_patches * W_patches, C, P, P)
-
-        # Apply backbone network
-        x = self.backbone(x)
+        # Extract patches & apply backbone network
+        iterator = generate_tensor_patches(x, (P, P), fill=self.fill)
+        x_patch_batches_embedded = []
+        try:
+            while True:
+                x_patch_batch = []
+                for _ in range(self.patch_batch_size):
+                    x_patch_batch.append(next(iterator))
+                x_patch_batch = torch.cat(x_patch_batch, dim=0)
+                x_patch_batches_embedded.append(self.backbone(x_patch_batch))
+        except StopIteration:
+            pass
+        finally:
+            del iterator
+        x = torch.cat(x_patch_batches_embedded, dim=0)
 
         # Map to required embedding dimension
         assert x.ndim == 2
@@ -71,7 +73,7 @@ class PatchBackbone(nn.Module):
         # Reshape back as expected from PatchEmbed
         # (B * H_patches * W_patches, *backbone_out_shape) ->
         # (B, H * W, *backbone_out_shape)
-        x = x.reshape(B, H_patches * W_patches, *x.shape[1:])
+        x = x.reshape(B, -1, *x.shape[1:])
 
         return x
     
