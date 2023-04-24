@@ -61,9 +61,9 @@ class PatchBackbone(nn.Module):
                 x_patch_batch = torch.cat(x_patch_batch, dim=0)
                 x_patch_batches_embedded.append(self.backbone(x_patch_batch))
         except StopIteration:
-            pass
-        finally:
-            del iterator
+            if len(x_patch_batch) > 0:
+                x_patch_batch = torch.cat(x_patch_batch, dim=0)
+                x_patch_batches_embedded.append(self.backbone(x_patch_batch))
         x = torch.cat(x_patch_batches_embedded, dim=0)
 
         # Map to required embedding dimension
