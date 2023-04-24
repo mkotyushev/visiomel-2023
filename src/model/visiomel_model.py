@@ -273,7 +273,14 @@ class VisiomelClassifier(VisiomelModel):
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
     ):
-        super().__init__()
+        super().__init__(
+            optimizer_init=optimizer_init,
+            lr_scheduler_init=lr_scheduler_init,
+            pl_lrs_cfg=pl_lrs_cfg,
+            finetuning=finetuning,
+            log_norm_verbose=log_norm_verbose,
+            lr_layer_decay=lr_layer_decay,
+        )
         self.save_hyperparameters()
 
     def configure_metrics(self):
