@@ -34,7 +34,7 @@ model:
       init_args:
         weight_decay: 0.01
         eps: 1e-08
-        lr: 1e-4
+        lr: 1e-3
     lr_scheduler_init:
       class_path: src.utils.lr_scheduler.PiecewiceFactorsLRScheduler
       init_args:
