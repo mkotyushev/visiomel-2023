@@ -44,6 +44,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         grad_checkpointing: bool = False,
         attention_hidden_dim: int = 64,
         patch_embed_caching: bool = False,
+        emb_precalc: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -55,32 +56,35 @@ class PatchAttentionClassifier(VisiomelClassifier):
         )
         self.save_hyperparameters()
 
-        backbone = timm.create_model(
-            patch_embed_backbone_name, 
-            img_size=patch_size, 
-            pretrained=False, 
-            num_classes=0
-        )
-        if patch_embed_backbone_ckpt_path is not None:
-            # If backbone is fine-tuned then it is done via SwinTransformerV2SimMIM
-            # module, so we need to remove the prefix 'model.encoder.' from the
-            # checkpoint state_dict keys.
-            state_dict = {
-                k \
-                    .replace('model.encoder.', 'model.'): v 
-                for k, v in 
-                torch.load(patch_embed_backbone_ckpt_path)['state_dict'].items()
-            }
-            backbone.load_state_dict(state_dict, strict=False)
-        backbone.set_grad_checkpointing(grad_checkpointing)
-        
-        self.patch_embed = PatchBackbone(
-            backbone=backbone, 
-            patch_size=patch_size, 
-            embed_dim=backbone.num_features,
-            patch_batch_size=patch_batch_size,
-            patch_embed_caching=patch_embed_caching,
-        )
+        if not emb_precalc:
+            backbone = timm.create_model(
+                patch_embed_backbone_name, 
+                img_size=patch_size, 
+                pretrained=False, 
+                num_classes=0
+            )
+            if patch_embed_backbone_ckpt_path is not None:
+                # If backbone is fine-tuned then it is done via SwinTransformerV2SimMIM
+                # module, so we need to remove the prefix 'model.encoder.' from the
+                # checkpoint state_dict keys.
+                state_dict = {
+                    k \
+                        .replace('model.encoder.', 'model.'): v 
+                    for k, v in 
+                    torch.load(patch_embed_backbone_ckpt_path)['state_dict'].items()
+                }
+                backbone.load_state_dict(state_dict, strict=False)
+            backbone.set_grad_checkpointing(grad_checkpointing)
+            
+            self.patch_embed = PatchBackbone(
+                backbone=backbone, 
+                patch_size=patch_size, 
+                embed_dim=backbone.num_features,
+                patch_batch_size=patch_batch_size,
+                patch_embed_caching=patch_embed_caching,
+            )
+        else:
+            self.patch_embed = None
         self.pooling = PatchAttentionPooling(
             n_classes=num_classes if num_classes > 2 else 1, 
             embed_dim=backbone.num_features,
@@ -104,12 +108,14 @@ class PatchAttentionClassifier(VisiomelClassifier):
         return loss, {'ce': loss}, out
 
     def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor, Any]], cache_key: Any = None) -> torch.Tensor:
-        if self.patch_embed_caching:
-            assert cache_key is not None, \
-                'Cache key must be provided when patch embedding caching is enabled'
-
-        # (B, C, H, W) -> (B, L, E)
-        x = self.patch_embed(x, cache_key=cache_key)
+        if self.patch_embed is None:
+            if self.patch_embed_caching:
+                assert cache_key is not None, \
+                    'Cache key must be provided when patch embedding caching is enabled'
+            # (B, C, H, W) -> (B, L, E)
+            x = self.patch_embed(x, cache_key=cache_key)
+        else:
+            pass
         # (B, L, E) -> (B, C, E)
         x = self.pooling(x)
         # (B, C, E) -> (B, C, 2)
