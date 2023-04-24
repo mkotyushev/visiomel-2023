@@ -59,7 +59,7 @@ model:
 data:
   class_path: src.data.visiomel_datamodule.VisiomelDatamodule
   init_args:
-    task: raw  # so no augs applied to full image
+    task: classification
     data_dir_train: /workspace/data/images_page_4_shrink/
     k: 5
     fold_index: 0
