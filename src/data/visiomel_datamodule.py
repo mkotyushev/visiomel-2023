@@ -30,15 +30,28 @@ logger = logging.getLogger(__name__)
 
 
 class SubsetDataset(Dataset):
-    def __init__(self, subset, transform=None):
+    def __init__(
+        self, 
+        subset, 
+        transform=None,
+        n_repeats=1,
+    ):
         self.subset = subset
         self.transform = transform
+        self.n_repeats = n_repeats
         
     def __getitem__(self, index):
         sample = self.subset[index]
-        if self.transform:
-            x = self.transform(sample[0])
-        return (x, *sample[1:])
+
+        samples = []
+        for _ in range(self.n_repeats):
+            if self.transform:
+                x = (self.transform(sample[0]), *sample[1:])
+            else:
+                x = sample
+            samples.append(x)
+            
+        return samples
         
     def __len__(self):
         return len(self.subset)
@@ -53,11 +66,13 @@ class VisiomelImageFolder(ImageFolder):
         transform=None, 
         target_transform=None, 
         loader=None, 
-        is_valid_file=None
+        is_valid_file=None,
+        n_repeats=1,
     ):
         super().__init__(root, transform, target_transform, loader, is_valid_file)
         self.cache = shared_cache
         self.pre_transform = pre_transform
+        self.n_repeats = n_repeats
 
     def load_cached(self, path):
         if self.cache is None or path not in self.cache:
@@ -73,12 +88,17 @@ class VisiomelImageFolder(ImageFolder):
     def __getitem__(self, index: int):
         path, target = self.samples[index]
         sample = self.load_cached(path)
-        if self.transform is not None:
-            sample = self.transform(sample)
-        if self.target_transform is not None:
-            target = self.target_transform(target)
 
-        return sample, target, path
+        samples = []
+        for _ in range(self.n_repeats):
+            if self.transform is not None:
+                x = self.transform(sample)
+            if self.target_transform is not None:
+                y = self.target_transform(target)
+
+            samples.append((x, y, path))
+
+        return samples
 
 
 def build_weighted_sampler(dataset):
@@ -142,6 +162,8 @@ class IdentityTransform:
 
 
 def simmim_collate_fn(batch):
+    if isinstance(batch[0], list):
+        batch = [item for sublist in batch for item in sublist]
     if not isinstance(batch[0][0], tuple):
         return default_collate(batch)
     else:
@@ -207,6 +229,7 @@ class VisiomelDatamodule(LightningDataModule):
         mask_patch_size: int = 32,
         model_patch_size: int = 4,
         mask_ratio: float = 0.6,
+        train_transform_n_repeats: Optional[int] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -292,6 +315,18 @@ class VisiomelDatamodule(LightningDataModule):
                 mask_ratio=self.hparams.mask_ratio,
             )
             simmim_transform = SimMIMTransform(mask_generator)
+        elif self.hparams.task == 'simmim_randaug':
+            train_random_transform = rand_augment_transform(
+                config_str='rand-m9-mstd0.5',
+                hparams=dict(img_mean=img_mean)
+            )
+            mask_generator = MaskGenerator(
+                input_size=self.hparams.img_size,
+                mask_patch_size=self.hparams.mask_patch_size,
+                model_patch_size=self.hparams.model_patch_size,
+                mask_ratio=self.hparams.mask_ratio,
+            )
+            simmim_transform = SimMIMTransform(mask_generator)
         elif self.hparams.task == 'classification':
             train_random_transform = rand_augment_transform(
                 config_str='rand-m9-mstd0.5',
@@ -345,8 +380,8 @@ class VisiomelDatamodule(LightningDataModule):
                     Subset(dataset, train_indices), Subset(dataset, val_indices)
                 
                 self.train_dataset, self.val_dataset = \
-                    SubsetDataset(train_subset, transform=self.train_transform), \
-                    SubsetDataset(val_subset, transform=self.val_transform)
+                    SubsetDataset(train_subset, transform=self.train_transform, n_repeats=self.hparams.train_transform_n_repeats), \
+                    SubsetDataset(val_subset, transform=self.val_transform, n_repeats=1)
                 self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
             else:
                 self.train_dataset = VisiomelImageFolder(
@@ -354,7 +389,8 @@ class VisiomelDatamodule(LightningDataModule):
                     shared_cache=self.shared_cache,
                     pre_transform=self.pre_transform,
                     transform=self.train_transform, 
-                    loader=loader_with_filepath
+                    loader=loader_with_filepath,
+                    n_repeats=self.hparams.train_transform_n_repeats,
                 )
                 self.val_dataset = None
 
@@ -365,7 +401,8 @@ class VisiomelDatamodule(LightningDataModule):
                     shared_cache=self.shared_cache,
                     pre_transform=self.pre_transform,
                     transform=self.test_transform, 
-                    loader=loader_with_filepath
+                    loader=loader_with_filepath,
+                    n_repeats=1,
                 )
 
     def train_dataloader(self) -> DataLoader:

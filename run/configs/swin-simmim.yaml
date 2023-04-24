@@ -23,6 +23,7 @@ trainer:
 model:
   class_path: src.model.swin_transformer_v2_simmim.SwinTransformerV2SimMIM
   init_args:
+    minibatch_size: 2
     grad_checkpointing: true
     # model_name: swinv2_large_window12to24_192to384_22kft1k
     model_name: swinv2_base_window12to24_192to384_22kft1k
@@ -55,6 +56,7 @@ model:
 data:
   class_path: src.data.visiomel_datamodule.VisiomelDatamodule
   init_args:
+    task: simmim_randaug
     data_dir_train: /workspace/data/images_page_4_shrink/
     k: 5
     fold_index: 0
@@ -70,3 +72,4 @@ data:
     mask_patch_size: 32
     model_patch_size: 4
     mask_ratio: 0.6
+    train_transform_n_repeats: 10

@@ -132,6 +132,7 @@ class SwinTransformerV2SimMIM(VisiomelModel):
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         grad_checkpointing: bool = False,
+        minibatch_size: Optional[int] = None,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -187,5 +188,21 @@ class SwinTransformerV2SimMIM(VisiomelModel):
     
     def compute_loss_preds(self, batch, *args, **kwargs):
         img, mask, _ = batch
-        loss = self(img, mask)
+        if self.hparams.minibatch_size is None:
+            loss = self(img, mask)
+        else:
+            assert img.shape[0] % self.hparams.minibatch_size == 0, \
+                f'Batch size {img.shape[0]} is not divisible by ' \
+                f'minibatch_size {self.hparams.minibatch_size}'
+            # Note: reduction is done in SimMIM
+            # for each minibatch, then loss is summed
+            # and divided by the number of minibatches
+            loss = 0.0
+            for im, ma in zip(
+                torch.split(img, self.hparams.minibatch_size), 
+                torch.split(mask, self.hparams.minibatch_size)
+            ):
+                loss += self(im, ma)
+            loss = loss / (img.shape[0] / self.hparams.minibatch_size)
+
         return loss, {'simmim': loss}, None
