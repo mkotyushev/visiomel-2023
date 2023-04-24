@@ -221,11 +221,11 @@ def generate_tensor_patches(img: Tensor, patch_size: tuple, fill: float):
     if H < patch_size[0]:
         pad_down = (patch_size[0] - img.shape[0]) // 2
         pad_up = patch_size[0] - img.shape[0] - pad_down
-        img = F.pad(img, (pad_up, pad_down), mode='constant', value=fill)
+        img = F.pad(img, (0, pad_up, 0, pad_down), padding_mode='constant', fill=fill)
     if W < patch_size[1]:
         pad_right = (patch_size[1] - img.shape[1]) // 2
         pad_left = patch_size[1] - img.shape[1] - pad_right
-        img = F.pad(img, (pad_left, pad_right), mode='constant', value=fill)
+        img = F.pad(img, (pad_left, 0, pad_right, 0), padding_mode='constant', fill=fill)
 
     # Generate patches
     img_size = img.shape[2:4]
