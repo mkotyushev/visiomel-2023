@@ -18,7 +18,7 @@ class PatchAttentionPooling(nn.Module):
     def forward(self, x):
         B = x.shape[0]
         query = self.class_emb.repeat(B, 1, 1)
-        x = self.attention(query, x, x, need_weights=False)
+        x, _ = self.attention(query, x, x)
         return x
 
 
@@ -27,13 +27,16 @@ class PatchAttentionClassifier(VisiomelClassifier):
         self, 
         num_classes: int = 2,
         patch_embed_backbone_name: str = 'swinv2_base_window12to24_192to384_22kft1k',
+        patch_embed_backbone_ckpt_path: str = None,
         patch_size: int = 1536,
+        patch_batch_size: int = 1,
         optimizer_init: Optional[Dict[str, Any]] = None,
         lr_scheduler_init: Optional[Dict[str, Any]] = None,
         pl_lrs_cfg: Optional[Dict[str, Any]] = None,
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        grad_checkpointing: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -45,11 +48,30 @@ class PatchAttentionClassifier(VisiomelClassifier):
         )
         self.save_hyperparameters()
 
-        backbone = timm.create_model(patch_embed_backbone_name, pretrained=True, num_classes=0)
+        backbone = timm.create_model(
+            patch_embed_backbone_name, 
+            img_size=patch_size, 
+            pretrained=False, 
+            num_classes=0
+        )
+        if patch_embed_backbone_ckpt_path is not None:
+            # If backbone is fine-tuned then it is done via SwinTransformerV2SimMIM
+            # module, so we need to remove the prefix 'model.encoder.' from the
+            # checkpoint state_dict keys.
+            state_dict = {
+                k \
+                    .replace('model.encoder.', 'model.'): v 
+                for k, v in 
+                torch.load(patch_embed_backbone_ckpt_path)['state_dict'].items()
+            }
+            backbone.load_state_dict(state_dict, strict=False)
+        backbone.set_grad_checkpointing(grad_checkpointing)
+        
         self.patch_embed = PatchBackbone(
             backbone=backbone, 
             patch_size=patch_size, 
-            embed_dim=backbone.num_features
+            embed_dim=backbone.num_features,
+            patch_batch_size=patch_batch_size
         )
         self.pooling = PatchAttentionPooling(
             n_classes=num_classes if num_classes > 2 else 1, 
@@ -57,6 +79,8 @@ class PatchAttentionClassifier(VisiomelClassifier):
         )
         self.classifier = nn.Linear(backbone.num_features, 2)
         self.loss_fn = nn.CrossEntropyLoss()
+
+        self.unfreeze_only_selected()
     
     def compute_loss_preds(self, batch, *args, **kwargs):
         x, y = batch
