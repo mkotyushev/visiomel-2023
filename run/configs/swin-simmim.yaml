@@ -72,4 +72,4 @@ data:
     mask_patch_size: 32
     model_patch_size: 4
     mask_ratio: 0.6
-    train_transform_n_repeats: 3
+    train_transform_n_repeats: 4
