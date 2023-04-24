@@ -229,6 +229,7 @@ class VisiomelDatamodule(LightningDataModule):
     
     def build_transforms(self):
         """Build data transformations."""
+        img_mean = (238, 231, 234)  # from all train data
         if self.hparams.train_resize_type == 'resize':
             # - resize to img_size in pretransform
             # - do nothing on train
@@ -236,7 +237,6 @@ class VisiomelDatamodule(LightningDataModule):
             pre_resize_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
             train_resize_transform = val_resize_transform = IdentityTransform()
         elif self.hparams.train_resize_type == 'random_crop':
-            img_mean = (238, 231, 234)  # from all train data
             # - do nothing in pretransform
             # - random crop to img_size on train
             # - center crop to img_size on val
