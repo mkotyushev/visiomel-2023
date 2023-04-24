@@ -28,6 +28,7 @@ model:
     patch_embed_backbone_ckpt_path: /workspace/visiomel-2023/weights/val_ssup_patches/checkpoints/last.ckpt
     patch_size: 1536
     patch_batch_size: 5
+    attention_hidden_dim: 64
     optimizer_init: 
       class_path: torch.optim.AdamW
       init_args:

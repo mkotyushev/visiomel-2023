@@ -8,11 +8,16 @@ from model.visiomel_model import VisiomelClassifier
 
 
 class PatchAttentionPooling(nn.Module):
-    def __init__(self, n_classes, embed_dim=1536):
+    def __init__(self, n_classes, embed_dim=1536, hidden_dim=64):
         super().__init__()
-        self.class_emb = nn.Parameter(torch.randn(1, n_classes, embed_dim))
+        self.class_emb = nn.Parameter(torch.randn(1, n_classes, hidden_dim))
         self.attention = nn.MultiheadAttention(
-            embed_dim=embed_dim, num_heads=1, dropout=0.2, batch_first=True
+            embed_dim=hidden_dim, 
+            kdim=embed_dim,
+            vdim=embed_dim,
+            num_heads=1, 
+            dropout=0.2, 
+            batch_first=True
         )
 
     def forward(self, x):
@@ -37,6 +42,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         grad_checkpointing: bool = False,
+        attention_hidden_dim: int = 64,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -75,9 +81,10 @@ class PatchAttentionClassifier(VisiomelClassifier):
         )
         self.pooling = PatchAttentionPooling(
             n_classes=num_classes if num_classes > 2 else 1, 
-            embed_dim=backbone.num_features
+            embed_dim=backbone.num_features,
+            hidden_dim=attention_hidden_dim
         )
-        self.classifier = nn.Linear(backbone.num_features, 2)
+        self.classifier = nn.Linear(attention_hidden_dim, 2)
         self.loss_fn = nn.CrossEntropyLoss()
 
         self.unfreeze_only_selected()
