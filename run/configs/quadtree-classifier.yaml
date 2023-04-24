@@ -8,8 +8,9 @@ model:
         - embedding.splitter
         - classifier
 data:
-  class_path: src.data.visiomel_datamodule.VisiomelTrainDatamoduleClassification
+  class_path: src.data.visiomel_datamodule.VisiomelDatamodule
   init_args:
+    task: classification
     data_dir_train: /workspace/data/images_page_7/
     img_size: 1024
     k: 5

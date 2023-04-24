@@ -2,11 +2,10 @@ import logging
 import random
 import numpy as np
 import torch
-import torchvision.transforms.functional as F
 from collections import Counter, defaultdict
 from copy import deepcopy
 from multiprocessing import Manager
-from typing import List, Optional, Union
+from typing import Optional
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
@@ -18,7 +17,6 @@ from torchvision.transforms import (
     ToTensor, 
     Normalize, 
     RandomCrop, 
-    CenterCrop,
     RandomHorizontalFlip
 )
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -143,11 +141,54 @@ class IdentityTransform:
         return x
 
 
-class VisiomelTrainDatamodule(LightningDataModule):
+def simmim_collate_fn(batch):
+    if not isinstance(batch[0][0], tuple):
+        return default_collate(batch)
+    else:
+        batch_num = len(batch)
+        ret = []
+        for item_idx in range(len(batch[0][0])):
+            if batch[0][0][item_idx] is None:
+                ret.append(None)
+            else:
+                ret.append(default_collate([batch[i][0][item_idx] for i in range(batch_num)]))
+        ret.append(default_collate([batch[i][1] for i in range(batch_num)]))
+        return ret
+
+
+class MaskGenerator:
+    def __init__(self, input_size=192, mask_patch_size=32, model_patch_size=4, mask_ratio=0.6):
+        self.input_size = input_size
+        self.mask_patch_size = mask_patch_size
+        self.model_patch_size = model_patch_size
+        self.mask_ratio = mask_ratio
+        
+        assert self.input_size % self.mask_patch_size == 0
+        assert self.mask_patch_size % self.model_patch_size == 0
+        
+        self.rand_size = self.input_size // self.mask_patch_size
+        self.scale = self.mask_patch_size // self.model_patch_size
+        
+        self.token_count = self.rand_size ** 2
+        self.mask_count = int(np.ceil(self.token_count * self.mask_ratio))
+        
+    def __call__(self):
+        mask_idx = np.random.permutation(self.token_count)[:self.mask_count]
+        mask = np.zeros(self.token_count, dtype=int)
+        mask[mask_idx] = 1
+        
+        mask = mask.reshape((self.rand_size, self.rand_size))
+        mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
+        
+        return mask
+
+
+class VisiomelDatamodule(LightningDataModule):
     def __init__(
         self,
+        task: str = 'classification',
         data_dir_train: str = './data/train',	
-        k: int = 5,
+        k: int = None,
         fold_index: int = 0,
         data_dir_test: Optional[str] = None,
         img_size: int = 224,
@@ -163,11 +204,12 @@ class VisiomelTrainDatamodule(LightningDataModule):
         enable_caching: bool = False,
         data_shrinked: bool = False,
         train_resize_type: str = 'resize',
+        mask_patch_size: int = 32,
+        model_patch_size: int = 4,
+        mask_ratio: float = 0.6,
     ):
         super().__init__()
-        
-        # this line allows to access init params with 'self.hparams' attribute
-        self.save_hyperparameters(logger=False)
+        self.save_hyperparameters()
 
         # num_splits = 10 means our dataset will be split to 10 parts
         # so we train on 90% of the data and validate on 10%
@@ -179,18 +221,152 @@ class VisiomelTrainDatamodule(LightningDataModule):
             manager = Manager()
             self.shared_cache = manager.dict()
         
-        self.collate_fn = None
-
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
 
-    def build_transforms(self):
-        """Build task-specific data transformations."""
+        self.collate_fn = simmim_collate_fn if task == 'simmim' else default_collate
     
+    def build_transforms(self):
+        """Build data transformations."""
+        if self.hparams.train_resize_type == 'resize':
+            # - resize to img_size in pretransform
+            # - do nothing on train
+            # - do nothing on val
+            pre_resize_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
+            train_resize_transform = val_resize_transform = IdentityTransform()
+        elif self.hparams.train_resize_type == 'random_crop':
+            img_mean = (238, 231, 234)  # from all train data
+            # - do nothing in pretransform
+            # - random crop to img_size on train
+            # - center crop to img_size on val
+            
+            # Note: here crops could lead to empty areas, 
+            # so padding is needed.
+            
+            # Note: image size after pretransform is rather large,
+            # so caching probably is not possible.
+            
+            # Note: reflective padding is dataleak for SimMIM
+            # and could not be used here
+            # but not for classification.
+            if self.hparams.enable_caching:
+                logger.warning(
+                    'Caching is enabled with large images. '
+                    'Consider using "resize" train_resize_type.'
+                )
+            pre_resize_transform = IdentityTransform()
+            train_resize_transform = RandomCrop(
+                size=(self.hparams.img_size, self.hparams.img_size),
+                pad_if_needed=True,
+                padding_mode='constant',
+                fill=img_mean
+            )
+            val_resize_transform = PadCenterCrop(
+                size=(self.hparams.img_size, self.hparams.img_size),
+                pad_if_needed=True,
+                padding_mode='constant',
+                fill=img_mean
+            )
+        elif self.hparams.train_resize_type == 'none':
+            pre_resize_transform, train_resize_transform, val_resize_transform = \
+                IdentityTransform(), IdentityTransform(), IdentityTransform()
+
+        if self.hparams.data_shrinked:
+            self.pre_transform = pre_resize_transform
+        else:
+            self.pre_transform = Compose(
+                [
+                    CenterCropPct(size=(0.9, 0.9)),
+                    Shrink(scale=self.hparams.shrink_preview_scale, fill=img_mean),
+                    pre_resize_transform,
+                ]
+            )
+
+        if self.hparams.task == 'simmim':
+            train_random_transform = RandomHorizontalFlip()
+            mask_generator = MaskGenerator(
+                input_size=self.hparams.img_size,
+                mask_patch_size=self.hparams.mask_patch_size,
+                model_patch_size=self.hparams.model_patch_size,
+                mask_ratio=self.hparams.mask_ratio,
+            )
+            simmim_transform = SimMIMTransform(mask_generator)
+        elif self.hparams.task == 'classification':
+            train_random_transform = rand_augment_transform(
+                config_str='rand-m9-mstd0.5',
+                hparams=dict(img_mean=img_mean)
+            )
+            simmim_transform = IdentityTransform()
+        elif self.hparams.task == 'raw':
+            train_random_transform = IdentityTransform()
+            simmim_transform = IdentityTransform()
+
+        self.train_transform = Compose(
+            [
+                train_resize_transform,
+                train_random_transform,
+                ToTensor(),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                simmim_transform,
+            ]
+        )
+        self.val_transform = self.test_transform = Compose(
+            [
+                val_resize_transform,
+                ToTensor(),
+                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
+                simmim_transform,
+            ]
+        )
+
     def setup(self, stage=None) -> None:
         """Setup data."""
         self.build_transforms()
+        if self.train_dataset is None:
+            # Train dataset
+            if self.hparams.k is not None:
+                dataset = VisiomelImageFolder(
+                    self.hparams.data_dir_train, 
+                    shared_cache=self.shared_cache,
+                    pre_transform=self.pre_transform,
+                    transform=None, 
+                    loader=loader_with_filepath
+                )
+                kfold = StratifiedKFold(
+                    n_splits=self.hparams.k, 
+                    shuffle=True, 
+                    random_state=self.hparams.split_seed
+                )
+                split = list(kfold.split(dataset, dataset.targets))
+                train_indices, val_indices = split[self.hparams.fold_index]
+
+                train_subset, val_subset = \
+                    Subset(dataset, train_indices), Subset(dataset, val_indices)
+                
+                self.train_dataset, self.val_dataset = \
+                    SubsetDataset(train_subset, transform=self.train_transform), \
+                    SubsetDataset(val_subset, transform=self.val_transform)
+                self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
+            else:
+                self.train_dataset = VisiomelImageFolder(
+                    self.hparams.data_dir_train, 
+                    shared_cache=self.shared_cache,
+                    pre_transform=self.pre_transform,
+                    transform=self.train_transform, 
+                    loader=loader_with_filepath
+                )
+                self.val_dataset = None
+
+            # Test dataset
+            if self.hparams.data_dir_test is not None:
+                self.test_dataset = VisiomelImageFolder(
+                    self.hparams.data_dir_test, 
+                    shared_cache=self.shared_cache,
+                    pre_transform=self.pre_transform,
+                    transform=self.test_transform, 
+                    loader=loader_with_filepath
+                )
 
     def train_dataloader(self) -> DataLoader:
         sampler, shuffle = None, True
@@ -247,416 +423,3 @@ class VisiomelTrainDatamodule(LightningDataModule):
 
     def predict_dataloader(self) -> DataLoader:
         return self.test_dataloader()
-
-
-class VisiomelTrainDatamoduleClassification(VisiomelTrainDatamodule):
-    def __init__(
-        self,
-        data_dir_train: str = './data/train',	
-        k: int = 5,
-        fold_index: int = 0,
-        data_dir_test: Optional[str] = None,
-        img_size: int = 224,
-        shrink_preview_scale: Optional[int] = None,
-        batch_size: int = 32,
-        split_seed: int = 0,
-        num_workers: int = 0,
-        num_workers_saturated: int = 0,
-        pin_memory: bool = False,
-        prefetch_factor: int = 2,
-        persistent_workers: bool = False,
-        sampler: Optional[str] = None,
-        enable_caching: bool = False,
-        data_shrinked: bool = False,
-        train_resize_type: str = 'resize',
-    ):
-        super().__init__(
-            data_dir_train=data_dir_train,
-            k=k,
-            fold_index=fold_index,
-            data_dir_test=data_dir_test,
-            img_size=img_size,
-            shrink_preview_scale=shrink_preview_scale,
-            batch_size=batch_size,
-            split_seed=split_seed,
-            num_workers=num_workers,
-            num_workers_saturated=num_workers_saturated,
-            pin_memory=pin_memory,
-            prefetch_factor=prefetch_factor,
-            persistent_workers=persistent_workers,
-            sampler=sampler,
-            enable_caching=enable_caching,
-            data_shrinked=data_shrinked,
-            train_resize_type=train_resize_type
-        )
-        self.save_hyperparameters()
-    
-    def build_transforms(self):
-        """Build task-specific data transformations."""
-        if self.hparams.train_resize_type == 'resize':
-            # Resize could be used for caching, so use it in pre_transform
-            resize_transform_train = resize_transform_val = IdentityTransform()
-            resize_transform_pre_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
-        elif self.hparams.train_resize_type == 'random_crop':
-            # RandomCrop is not suitable for caching, so use it in train_transform
-            # and do not resize in pre_transform. If enable_caching is set, 
-            # it will cache large images before resize.
-            if self.hparams.enable_caching:
-                logger.warning(
-                    'Caching is enabled with large images. '
-                    'Consider using "resize" train_resize_type.'
-                )
-            resize_transform_train = RandomCrop(
-                size=(self.hparams.img_size, self.hparams.img_size),
-                pad_if_needed=True,
-                padding_mode='reflect'
-            )
-            resize_transform_val = CenterCrop(size=(self.hparams.img_size, self.hparams.img_size))
-            resize_transform_pre_transform = IdentityTransform()
-
-        if self.hparams.data_shrinked:
-            self.pre_transform = resize_transform_pre_transform
-            img_mean = (193, 187, 205)  # from train data shrinked
-        else:
-            self.pre_transform = Compose(
-                [
-                    CenterCropPct(size=(0.9, 0.9)),
-                    Shrink(scale=self.hparams.shrink_preview_scale),
-                    resize_transform_pre_transform,
-                ]
-            )
-            img_mean = (238, 231, 234)  # from all train data
-
-        self.train_transform = Compose(
-            [
-                resize_transform_train,
-                rand_augment_transform(
-                    config_str='rand-m9-mstd0.5',
-                    hparams=dict(img_mean=img_mean)
-                ),
-                ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD))
-            ]
-        )
-
-        non_train_transform = Compose(
-            [
-                resize_transform_val,
-                ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN),std=torch.tensor(IMAGENET_DEFAULT_STD))
-            ]
-        )
-        self.val_transform = non_train_transform
-        self.test_transform = non_train_transform
-
-    def setup(self, stage=None) -> None:
-        """Setup data."""
-        super().setup(stage)
-
-        if self.train_dataset is None and self.val_dataset is None:
-            # Train & val dataset as k-th fold
-            dataset = VisiomelImageFolder(
-                self.hparams.data_dir_train, 
-                shared_cache=self.shared_cache,
-                pre_transform=self.pre_transform,
-                transform=None, 
-                loader=loader_with_filepath
-            )
-
-            kfold = StratifiedKFold(
-                n_splits=self.hparams.k, 
-                shuffle=True, 
-                random_state=self.hparams.split_seed
-            )
-            split = list(kfold.split(dataset, dataset.targets))
-            train_indices, val_indices = split[self.hparams.fold_index]
-
-            train_subset, val_subset = \
-                Subset(dataset, train_indices), Subset(dataset, val_indices)
-            
-            self.train_dataset, self.val_dataset = \
-                SubsetDataset(train_subset, transform=self.train_transform), \
-                SubsetDataset(val_subset, transform=self.val_transform)
-            self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
-
-        # Test dataset
-        if self.test_dataset is None and self.hparams.data_dir_test is not None:
-            self.test_dataset = VisiomelImageFolder(
-                self.hparams.data_dir_test, 
-                shared_cache=None,
-                pre_transform=self.pre_transform,
-                transform=self.test_transform, 
-                loader=loader_with_filepath
-            )
-
-
-def simmim_collate_fn(batch):
-    if not isinstance(batch[0][0], tuple):
-        return default_collate(batch)
-    else:
-        batch_num = len(batch)
-        ret = []
-        for item_idx in range(len(batch[0][0])):
-            if batch[0][0][item_idx] is None:
-                ret.append(None)
-            else:
-                ret.append(default_collate([batch[i][0][item_idx] for i in range(batch_num)]))
-        ret.append(default_collate([batch[i][1] for i in range(batch_num)]))
-        return ret
-
-
-class MaskGenerator:
-    def __init__(self, input_size=192, mask_patch_size=32, model_patch_size=4, mask_ratio=0.6):
-        self.input_size = input_size
-        self.mask_patch_size = mask_patch_size
-        self.model_patch_size = model_patch_size
-        self.mask_ratio = mask_ratio
-        
-        assert self.input_size % self.mask_patch_size == 0
-        assert self.mask_patch_size % self.model_patch_size == 0
-        
-        self.rand_size = self.input_size // self.mask_patch_size
-        self.scale = self.mask_patch_size // self.model_patch_size
-        
-        self.token_count = self.rand_size ** 2
-        self.mask_count = int(np.ceil(self.token_count * self.mask_ratio))
-        
-    def __call__(self):
-        mask_idx = np.random.permutation(self.token_count)[:self.mask_count]
-        mask = np.zeros(self.token_count, dtype=int)
-        mask[mask_idx] = 1
-        
-        mask = mask.reshape((self.rand_size, self.rand_size))
-        mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
-        
-        return mask
-
-
-class VisiomelTrainDatamoduleSimMIM(VisiomelTrainDatamodule):
-    def __init__(
-        self,
-        data_dir_train: str = './data/train',	
-        k: int = None,
-        fold_index: int = 0,
-        data_dir_test: Optional[str] = None,
-        img_size: int = 224,
-        shrink_preview_scale: Optional[int] = None,
-        batch_size: int = 32,
-        split_seed: int = 0,
-        num_workers: int = 0,
-        num_workers_saturated: int = 0,
-        pin_memory: bool = False,
-        prefetch_factor: int = 2,
-        persistent_workers: bool = False,
-        sampler: Optional[str] = None,
-        enable_caching: bool = False,
-        data_shrinked: bool = False,
-        train_resize_type: str = 'resize',
-        mask_patch_size: int = 32,
-        model_patch_size: int = 4,
-        mask_ratio: float = 0.6
-    ):
-        super().__init__(
-            data_dir_train=data_dir_train,
-            k=k,
-            fold_index=fold_index,
-            data_dir_test=data_dir_test,
-            img_size=img_size,
-            shrink_preview_scale=shrink_preview_scale,
-            batch_size=batch_size,
-            split_seed=split_seed,
-            num_workers=num_workers,
-            num_workers_saturated=num_workers_saturated,
-            pin_memory=pin_memory,
-            prefetch_factor=prefetch_factor,
-            persistent_workers=persistent_workers,
-            sampler=sampler,
-            enable_caching=enable_caching,
-            data_shrinked=data_shrinked,
-            train_resize_type=train_resize_type
-        )
-        self.save_hyperparameters()
-        self.mask_generator = MaskGenerator(
-            input_size=img_size,
-            mask_patch_size=mask_patch_size,
-            model_patch_size=model_patch_size,
-            mask_ratio=mask_ratio,
-        )
-        self.collate_fn = simmim_collate_fn
-    
-    def build_transforms(self):
-        """Build task-specific data transformations."""
-        pre_resize_transform, train_resize_transform, val_resize_transform = \
-            IdentityTransform(), IdentityTransform(), IdentityTransform()
-        if self.hparams.train_resize_type == 'resize':
-            # - resize to img_size in pretransform
-            # - do nothing on train
-            # - do nothing on val
-            pre_resize_transform = Resize(size=(self.hparams.img_size, self.hparams.img_size))
-            train_resize_transform = val_resize_transform = IdentityTransform()
-        elif self.hparams.train_resize_type == 'random_crop':
-            img_mean = (238, 231, 234)  # from all train data
-            # - do nothing in pretransform
-            # - random crop to img_size on train
-            # - center crop to img_size on val
-            
-            # Note: here crops could lead to empty areas, 
-            # so padding is needed.
-            
-            # Note: image size after pretransform is rather large,
-            # so caching probably is not possible.
-            
-            # Note: reflective padding is dataleak for SimMIM
-            # and could not be used here
-            # but not for classification.
-            if self.hparams.enable_caching:
-                logger.warning(
-                    'Caching is enabled with large images. '
-                    'Consider using "resize" train_resize_type.'
-                )
-            pre_resize_transform = IdentityTransform()
-            train_resize_transform = RandomCrop(
-                size=(self.hparams.img_size, self.hparams.img_size),
-                pad_if_needed=True,
-                padding_mode='constant',
-                fill=img_mean
-            )
-            val_resize_transform = PadCenterCrop(
-                size=(self.hparams.img_size, self.hparams.img_size),
-                pad_if_needed=True,
-                padding_mode='constant',
-                fill=img_mean
-            )
-
-        if self.hparams.data_shrinked:
-            self.pre_transform = pre_resize_transform
-        else:
-            self.pre_transform = Compose(
-                [
-                    CenterCropPct(size=(0.9, 0.9)),
-                    Shrink(scale=self.hparams.shrink_preview_scale, fill=img_mean),
-                    pre_resize_transform,
-                ]
-            )
-
-        self.train_transform = Compose(
-            [
-                train_resize_transform,
-                RandomHorizontalFlip(),
-                ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
-                SimMIMTransform(self.mask_generator),
-            ]
-        )
-        self.val_transform = Compose(
-            [
-                val_resize_transform,
-                ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
-                SimMIMTransform(self.mask_generator),
-            ]
-        )
-
-        # Raw images (no test or val cropping / resizing, only pretransform) here, 
-        # so it could be done later
-        self.transform_no_random = Compose(
-            [
-                ToTensor(),
-                Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
-            ]
-        )
-
-    def setup(self, stage=None) -> None:
-        """Setup data."""
-        super().setup(stage)
-        if self.train_dataset is None:
-            # Train dataset
-            if self.hparams.k is not None:
-                dataset = VisiomelImageFolder(
-                    self.hparams.data_dir_train, 
-                    shared_cache=self.shared_cache,
-                    pre_transform=self.pre_transform,
-                    transform=None, 
-                    loader=loader_with_filepath
-                )
-                kfold = StratifiedKFold(
-                    n_splits=self.hparams.k, 
-                    shuffle=True, 
-                    random_state=self.hparams.split_seed
-                )
-                split = list(kfold.split(dataset, dataset.targets))
-                train_indices, val_indices = split[self.hparams.fold_index]
-
-                train_subset, val_subset = \
-                    Subset(dataset, train_indices), Subset(dataset, val_indices)
-                
-                self.train_dataset, self.val_dataset = \
-                    SubsetDataset(train_subset, transform=self.train_transform), \
-                    SubsetDataset(val_subset, transform=self.val_transform)
-                self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
-            else:
-                self.train_dataset = VisiomelImageFolder(
-                    self.hparams.data_dir_train, 
-                    shared_cache=self.shared_cache,
-                    pre_transform=self.pre_transform,
-                    transform=self.train_transform, 
-                    loader=loader_with_filepath
-                )
-
-            # Train & val dataset, but without random and resize transforms
-            self.train_dataset_no_random = VisiomelImageFolder(
-                self.hparams.data_dir_train, 
-                shared_cache=self.shared_cache,
-                pre_transform=self.pre_transform,
-                transform=self.transform_no_random, 
-                loader=loader_with_filepath
-            )
-            self.val_dataset_no_random = VisiomelImageFolder(
-                self.hparams.data_dir_train, 
-                shared_cache=self.shared_cache,
-                pre_transform=self.pre_transform,
-                transform=self.transform_no_random, 
-                loader=loader_with_filepath
-            )
-
-    def val_dataloader(self) -> DataLoader:
-        val_dataloader = DataLoader(
-            dataset=self.val_dataset, 
-            batch_size=self.hparams.batch_size, 
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            prefetch_factor=self.hparams.prefetch_factor,
-            persistent_workers=self.hparams.persistent_workers,
-            collate_fn=self.collate_fn,
-            shuffle=False
-        )
-        return val_dataloader
-    
-    def test_dataloader(self) -> DataLoader:
-        return None
-    
-    def train_val_dataloaders_no_random(self) -> Union[DataLoader, List[DataLoader]]:
-        train_dataloader = DataLoader(
-            dataset=self.train_dataset_no_random, 
-            batch_size=self.hparams.batch_size, 
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            prefetch_factor=self.hparams.prefetch_factor,
-            persistent_workers=self.hparams.persistent_workers,
-            collate_fn=self.collate_fn,
-            shuffle=False
-        )
-        if self.hparams.k is None:
-            return train_dataloader
-        else:
-            val_dataloader = DataLoader(
-                dataset=self.val_dataset_no_random, 
-                batch_size=self.hparams.batch_size, 
-                num_workers=self.hparams.num_workers,
-                pin_memory=self.hparams.pin_memory,
-                prefetch_factor=self.hparams.prefetch_factor,
-                persistent_workers=self.hparams.persistent_workers,
-                collate_fn=self.collate_fn,
-                shuffle=False
-            )
-            return train_dataloader, val_dataloader
