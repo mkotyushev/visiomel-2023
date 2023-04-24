@@ -35,10 +35,10 @@ class SubsetDataset(Dataset):
         self.transform = transform
         
     def __getitem__(self, index):
-        x, y = self.subset[index]
+        sample = self.subset[index]
         if self.transform:
-            x = self.transform(x)
-        return x, y
+            x = self.transform(sample[0])
+        return (x, *sample[1:])
         
     def __len__(self):
         return len(self.subset)
@@ -78,7 +78,7 @@ class VisiomelImageFolder(ImageFolder):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return sample, target
+        return sample, target, path
 
 
 def build_weighted_sampler(dataset):

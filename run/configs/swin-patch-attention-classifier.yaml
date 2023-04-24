@@ -29,6 +29,7 @@ model:
     patch_size: 1536
     patch_batch_size: 5
     attention_hidden_dim: 64
+    patch_embed_caching: true
     optimizer_init: 
       class_path: torch.optim.AdamW
       init_args:
@@ -60,7 +61,7 @@ model:
 data:
   class_path: src.data.visiomel_datamodule.VisiomelDatamodule
   init_args:
-    task: classification
+    task: raw
     data_dir_train: /workspace/data/images_page_4_shrink/
     k: 5
     fold_index: 0

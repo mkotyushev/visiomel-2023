@@ -35,7 +35,7 @@ def build_drloc(params):
 
 class PatchBackbone(nn.Module):
     """Apply backbone network to each patch."""
-    def __init__(self, backbone, patch_size=16, embed_dim=768, patch_batch_size=1, fill=0):
+    def __init__(self, backbone, patch_size=16, embed_dim=768, patch_batch_size=1, fill=0, patch_embed_caching=False):
         super().__init__()
         self.backbone = backbone
         self.patch_size = patch_size
@@ -45,8 +45,24 @@ class PatchBackbone(nn.Module):
             self.linear = nn.Identity()
         self.patch_batch_size = patch_batch_size
         self.fill = fill
+
+        self.cache = None
+        if patch_embed_caching:
+            self.cache = {}
     
-    def forward(self, x):
+    def forward(self, x, cache_key=None):
+        if self.cache is not None and cache_key is not None:
+            result = []
+            for i, key in enumerate(cache_key):
+                if key not in self.cache:
+                    self.cache[key] = self._forward(x[i].unsqueeze(0)).cpu()
+                result.append(self.cache[key].to(x.device))
+            result = torch.cat(result, dim=0)
+            return result
+        else:
+            return self._forward(x)
+    
+    def _forward(self, x):
         B, C, H, W = x.shape
         P = self.patch_size
         

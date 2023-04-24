@@ -1,7 +1,7 @@
 import timm
 import torch
 import torch.nn as nn
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from model.patch_embed_with_backbone import PatchBackbone
 from model.visiomel_model import VisiomelClassifier
@@ -43,6 +43,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         grad_checkpointing: bool = False,
         attention_hidden_dim: int = 64,
+        patch_embed_caching: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -77,7 +78,8 @@ class PatchAttentionClassifier(VisiomelClassifier):
             backbone=backbone, 
             patch_size=patch_size, 
             embed_dim=backbone.num_features,
-            patch_batch_size=patch_batch_size
+            patch_batch_size=patch_batch_size,
+            patch_embed_caching=patch_embed_caching,
         )
         self.pooling = PatchAttentionPooling(
             n_classes=num_classes if num_classes > 2 else 1, 
@@ -87,17 +89,27 @@ class PatchAttentionClassifier(VisiomelClassifier):
         self.classifier = nn.Linear(attention_hidden_dim, 2)
         self.loss_fn = nn.CrossEntropyLoss()
 
+        self.patch_embed_caching = patch_embed_caching
+
         self.unfreeze_only_selected()
     
     def compute_loss_preds(self, batch, *args, **kwargs):
-        x, y = batch
-        out = self(x)
+        if len(batch) == 2:
+            x, y = batch
+            cache_key = None
+        elif len(batch) == 3:
+            x, y, cache_key = batch
+        out = self(x, cache_key=cache_key)
         loss = self.loss_fn(out, y)
         return loss, {'ce': loss}, out
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor, Any]], cache_key: Any = None) -> torch.Tensor:
+        if self.patch_embed_caching:
+            assert cache_key is not None, \
+                'Cache key must be provided when patch embedding caching is enabled'
+
         # (B, C, H, W) -> (B, L, E)
-        x = self.patch_embed(x)
+        x = self.patch_embed(x, cache_key=cache_key)
         # (B, L, E) -> (B, C, E)
         x = self.pooling(x)
         # (B, C, E) -> (B, C, 2)
