@@ -23,7 +23,7 @@ trainer:
 model:
   class_path: src.model.swin_transformer_v2_simmim.SwinTransformerV2SimMIM
   init_args:
-    minibatch_size: 2
+    minibatch_size: 1
     grad_checkpointing: true
     # model_name: swinv2_large_window12to24_192to384_22kft1k
     model_name: swinv2_base_window12to24_192to384_22kft1k
