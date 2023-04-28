@@ -187,7 +187,7 @@ class SwinTransformerV2SimMIM(VisiomelModel):
         return self.model(x, mask)
     
     def compute_loss_preds(self, batch, *args, **kwargs):
-        img, mask, _ = batch
+        img, mask, *_ = batch
         if self.hparams.minibatch_size is None:
             loss = self(img, mask)
         else:

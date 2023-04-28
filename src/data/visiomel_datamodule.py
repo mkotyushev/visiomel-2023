@@ -170,7 +170,7 @@ def simmim_collate_fn(batch):
     if isinstance(batch[0], list):
         batch = [item for sublist in batch for item in sublist]
     if not isinstance(batch[0][0], tuple):
-        return default_collate(batch)
+        ret = default_collate(batch)
     else:
         batch_num = len(batch)
         ret = []
@@ -180,7 +180,8 @@ def simmim_collate_fn(batch):
             else:
                 ret.append(default_collate([batch[i][0][item_idx] for i in range(batch_num)]))
         ret.append(default_collate([batch[i][1] for i in range(batch_num)]))
-        return ret
+        ret.append(default_collate([batch[i][2] for i in range(batch_num)]))
+    return ret
 
 
 class MaskGenerator:
