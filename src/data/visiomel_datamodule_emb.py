@@ -1,6 +1,7 @@
 import logging
 import pickle
 from typing import List, Optional
+import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader, Subset
 from pytorch_lightning import LightningDataModule
@@ -22,25 +23,27 @@ class EmbeddingDataset:
                     self.data = data
                 else:
                     self.data = pd.concat([self.data, data])
+        self.data['features'] = self.data['features'].apply(np.array)
+        self.data['label'] = self.data['label'].apply(np.array)
         self.data['file_index'] = self.data.groupby('path').ngroup()
 
     @property
     def targets(self):
-        return self.data['label'].groupby('file_index').first().values
+        return self.data['label'].values
     
     @property
     def file_indices(self):
         return self.data['file_index'].values
 
     def __len__(self):
-        return self.data['file_index'].nunique()
+        return len(self.data)
 
     def __getitem__(self, index):
-        data = self.data[self.data['file_index'] == index]
-        return data['features'].values, data['label'].values[0]
+        row = self.data.iloc[index]
+        return row['features'], row['label'], row['path']
 
 
-class VisiomelDatamodule(LightningDataModule):
+class VisiomelDatamoduleEmb(LightningDataModule):
     def __init__(
         self,
         embedding_pathes: List[str],	
@@ -53,6 +56,7 @@ class VisiomelDatamodule(LightningDataModule):
         prefetch_factor: int = 2,
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
+        num_workers_saturated: int = 0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -76,7 +80,7 @@ class VisiomelDatamodule(LightningDataModule):
                     shuffle=True, 
                     random_state=self.hparams.split_seed
                 )
-                split = list(kfold.split(dataset, dataset.targets, dataset.file_indices))
+                split = list(kfold.split(dataset, dataset.targets.astype(int), dataset.file_indices))
                 train_indices, val_indices = split[self.hparams.fold_index]
 
                 train_subset, val_subset = \
