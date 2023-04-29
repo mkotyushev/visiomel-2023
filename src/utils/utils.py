@@ -293,7 +293,7 @@ def extract_features(model, dataloader, last_only=False):
     return features_all, y_all
 
 
-def preprocess_meta(df):
+def preprocess_meta(df, onehot=True, normalize=True):
     # keep age	sex	body_site	melanoma_history	resolution cols
     df = df.drop(columns=df.columns.difference(['age', 'sex', 'body_site', 'melanoma_history', 'resolution']))
 
@@ -301,18 +301,20 @@ def preprocess_meta(df):
     df['age'] = df['age'].apply(lambda x: x.split(':')[0][1:]).astype(float)
 
     # One-hot encode
-    onehot_features_cols = ['sex', 'body_site', 'melanoma_history']
+    if onehot:
+        onehot_features_cols = ['sex', 'body_site', 'melanoma_history']
 
-    onehot_encoder = OneHotEncoder(handle_unknown='ignore')
-    onehot_encoder.fit(df[onehot_features_cols].values)
-    onehot_encoded = onehot_encoder.transform(df[onehot_features_cols].values).toarray()
-    onehot_encoded_df = pd.DataFrame(onehot_encoded, columns=onehot_encoder.get_feature_names_out(onehot_features_cols))
-    df = pd.concat([df, onehot_encoded_df], axis=1)
-    df = df.drop(columns=onehot_features_cols)
+        onehot_encoder = OneHotEncoder(handle_unknown='ignore')
+        onehot_encoder.fit(df[onehot_features_cols].values)
+        onehot_encoded = onehot_encoder.transform(df[onehot_features_cols].values).toarray()
+        onehot_encoded_df = pd.DataFrame(onehot_encoded, columns=onehot_encoder.get_feature_names_out(onehot_features_cols))
+        df = pd.concat([df, onehot_encoded_df], axis=1)
+        df = df.drop(columns=onehot_features_cols)
 
     # Normalize non-one-hot-encoded features
-    seq_features_cols = ['age', 'resolution']
-    for col in seq_features_cols:
-        df[col] = (df[col] - df[col].mean()) / df[col].std()
+    if normalize:
+        seq_features_cols = ['age', 'resolution']
+        for col in seq_features_cols:
+            df[col] = (df[col] - df[col].mean()) / df[col].std()
     
     return df
