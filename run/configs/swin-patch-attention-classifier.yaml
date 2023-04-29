@@ -27,9 +27,11 @@ model:
     patch_embed_backbone_name: swinv2_base_window12to24_192to384_22kft1k
     patch_embed_backbone_ckpt_path: /workspace/visiomel-2023/weights/val_ssup_patches/checkpoints/last.ckpt
     patch_size: 1536
-    patch_batch_size: 5
+    patch_batch_size: 16
     attention_hidden_dim: 64
-    patch_embed_caching: true
+    patch_embed_caching: false
+    emb_precalc: true
+    emb_precalc_dim: 4416
     optimizer_init: 
       class_path: torch.optim.AdamW
       init_args:
@@ -59,19 +61,15 @@ model:
         - pooling
         - classifier
 data:
-  class_path: src.data.visiomel_datamodule.VisiomelDatamodule
+  class_path: src.data.visiomel_datamodule_emb.VisiomelDatamoduleEmb
   init_args:
-    task: raw
-    data_dir_train: /workspace/data/images_page_4_shrink/
+    embedding_pathes: 
+      - /workspace/visiomel-2023/weights/pretrained/embeddings/all.pkl
     k: 5
     fold_index: 0
-    data_shrinked: true
-    shrink_preview_scale: null
-    # implementing batch_size > 1 is not feasible (patch size is rather large and not many will fit into GPU memory)
-    batch_size: 1
-    num_workers: 4
-    num_workers_saturated: 4
-    prefetch_factor: null
-    enable_caching: false
-    train_resize_type: none
+    split_seed: 0
+    batch_size: 32
+    num_workers: 10
+    prefetch_factor: 2
     pin_memory: false
+    sampler: weighted_upsampling
