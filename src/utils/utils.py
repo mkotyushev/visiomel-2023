@@ -318,3 +318,49 @@ def preprocess_meta(df, onehot=True, normalize=True):
             df[col] = (df[col] - df[col].mean()) / df[col].std()
     
     return df
+
+
+def extract_features_patches(model, dataloader, patch_size=384, last_only=False):
+    features_all, y_all = [], []
+    for batch in tqdm(dataloader):
+        x, y, _ = batch[0]
+        with torch.no_grad():
+            x, y = x.cuda(), y.cuda()
+
+            B, C, H, W = x.shape
+            P = patch_size
+
+            # Pad image to be divisible by P
+            W_pad = (P - x.shape[3] % P) if x.shape[3] % P != 0 else 0
+            H_pad = (P - x.shape[2] % P) if x.shape[2] % P != 0 else 0
+            x = torch.nn.functional.pad(x, (0, P - W_pad, 0, H_pad), mode='reflect')
+
+            # Extract patches
+            x = x \
+                .unfold(2, P, P) \
+                .unfold(3, P, P)
+
+            # Concat to batch dimension
+            # (B, C, H_patches, W_patches, patch_size, patch_size) -> 
+            # (B * H_patches * W_patches, C, patch_size, patch_size)
+            H_patches, W_patches = x.shape[2:4]
+            x = x.reshape(B * H_patches * W_patches, C, P, P)
+
+            # Extract features
+            if last_only:
+                features = extract_features_last_only_single(model, x)
+            else:
+                features = extract_features_single(model, x)
+
+            # Reshape back as expected from PatchEmbed
+            # (B * H_patches * W_patches, *backbone_out_shape) ->
+            # (B, H * W, *backbone_out_shape)
+            features = features.reshape(B, H_patches * W_patches, *features.shape[1:])
+            
+            features_all.append(features.cpu())
+            y_all.append(y.cpu())
+
+    features_all = torch.cat(features_all, dim=0)
+    y_all = torch.cat(y_all, dim=0)
+
+    return features_all, y_all
