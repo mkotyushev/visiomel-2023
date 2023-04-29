@@ -3,9 +3,11 @@ import pickle
 from typing import List, Optional
 import numpy as np
 import pandas as pd
+import torch
 from torch.utils.data import DataLoader, Subset
 from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import StratifiedGroupKFold
+from torch.utils.data._utils.collate import default_collate
 
 from .visiomel_datamodule import SubsetDataset, build_downsampled_dataset, build_weighted_sampler
 
@@ -23,7 +25,7 @@ class EmbeddingDataset:
                     self.data = data
                 else:
                     self.data = pd.concat([self.data, data])
-        self.data['features'] = self.data['features'].apply(np.array)
+        self.data['features'] = self.data['features'].apply(lambda x: np.array(x).squeeze(0))
         self.data['label'] = self.data['label'].apply(np.array)
         self.data['file_index'] = self.data.groupby('path').ngroup()
 
@@ -41,6 +43,25 @@ class EmbeddingDataset:
     def __getitem__(self, index):
         row = self.data.iloc[index]
         return row['features'], row['label'], row['path']
+    
+
+def masked_collate_fn(batch):
+    # batch: list of [X: np.array, y: int, path: str] ->
+    # X.shape = (n_frames, n_features), n_frames could 
+    # be different for different samples
+
+    # Pad & pack sequences with different lengths to max length
+    # across the batch, create bool mask for padded values
+
+    X = [torch.from_numpy(x) for x, _, _ in batch]
+    y = default_collate([y_ for _, y_, _ in batch])
+    paths = [path for _, _, path in batch]
+
+    lengths = torch.tensor([len(x) for x in X])
+    mask = ~torch.nn.utils.rnn.pad_sequence([torch.ones(l) for l in lengths], batch_first=True).bool()
+    X = torch.nn.utils.rnn.pad_sequence(X, batch_first=True)
+
+    return X, mask, y, paths
 
 
 class VisiomelDatamoduleEmb(LightningDataModule):
@@ -68,6 +89,8 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+
+        self.collate_fn = masked_collate_fn
     
     def setup(self, stage=None) -> None:
         """Setup data."""
@@ -107,7 +130,8 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
             sampler=sampler,
-            shuffle=shuffle
+            shuffle=shuffle,
+            collate_fn=self.collate_fn,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -118,7 +142,8 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
-            shuffle=False
+            shuffle=False,
+            collate_fn=self.collate_fn,
         )
         val_dataloader_downsampled = DataLoader(
             dataset=self.val_dataset_downsampled, 
@@ -127,6 +152,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             prefetch_factor=self.hparams.prefetch_factor,
             persistent_workers=self.hparams.persistent_workers,
-            shuffle=False
+            shuffle=False,
+            collate_fn=self.collate_fn,
         )
         return [val_dataloader, val_dataloader_downsampled]
