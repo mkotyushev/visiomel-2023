@@ -1,11 +1,11 @@
 trainer:
   # limit_train_batches: 10
   # limit_val_batches: 10
-  max_epochs: 10
+  max_epochs: 100
   num_sanity_val_steps: 0
-  accumulate_grad_batches: 32
+  accumulate_grad_batches: 1
   reload_dataloaders_every_n_epochs: 0
-  log_every_n_steps: 1
+  log_every_n_steps: 10
   gradient_clip_val: 20
   check_val_every_n_epoch: 1
   callbacks:
@@ -28,10 +28,10 @@ model:
     patch_embed_backbone_ckpt_path: /workspace/visiomel-2023/weights/val_ssup_patches/checkpoints/last.ckpt
     patch_size: 1536
     patch_batch_size: 16
-    attention_hidden_dim: 64
+    attention_hidden_dim: 256
     patch_embed_caching: false
     emb_precalc: true
-    emb_precalc_dim: 4416
+    emb_precalc_dim: 1024
     optimizer_init: 
       class_path: torch.optim.AdamW
       init_args:
@@ -56,7 +56,7 @@ model:
       frequency: 1
     lr_layer_decay: 1.0
     finetuning:
-      unfreeze_before_epoch: 500
+      unfreeze_before_epoch: 5000
       unfreeze_layer_names_startswith:
         - pooling
         - classifier
@@ -64,12 +64,14 @@ data:
   class_path: src.data.visiomel_datamodule_emb.VisiomelDatamoduleEmb
   init_args:
     embedding_pathes: 
-      - /workspace/visiomel-2023/weights/pretrained/embeddings/all.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_0/embeddings/train.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_0/embeddings/val_aug.pkl
     k: 5
     fold_index: 0
     split_seed: 0
     batch_size: 32
     num_workers: 10
+    num_workers_saturated: 10
     prefetch_factor: 2
     pin_memory: false
     sampler: weighted_upsampling
