@@ -20,10 +20,13 @@ class PatchAttentionPooling(nn.Module):
             batch_first=True
         )
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         B = x.shape[0]
         query = self.class_emb.repeat(B, 1, 1)
-        x, _ = self.attention(query, x, x)
+        # key and value are the same, so mask should be
+        # the same for both
+        attn_mask = mask.unsqueeze(1)
+        x, _ = self.attention(query, x, x, attn_mask=attn_mask, key_padding_mask=mask)
         return x
 
 
@@ -91,7 +94,15 @@ class PatchAttentionClassifier(VisiomelClassifier):
             embed_dim=emb_precalc_dim,
             hidden_dim=attention_hidden_dim
         )
-        self.classifier = nn.Linear(attention_hidden_dim, 2)
+        self.classifier = nn.Sequential(
+            nn.Linear(attention_hidden_dim, attention_hidden_dim // 2),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(attention_hidden_dim // 2),
+            nn.Linear(attention_hidden_dim // 2, attention_hidden_dim // 4),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(attention_hidden_dim // 4),
+            nn.Linear(attention_hidden_dim // 4, 2),
+        )
         self.loss_fn = nn.CrossEntropyLoss()
 
         self.patch_embed_caching = patch_embed_caching
@@ -99,16 +110,19 @@ class PatchAttentionClassifier(VisiomelClassifier):
         self.unfreeze_only_selected()
     
     def compute_loss_preds(self, batch, *args, **kwargs):
+        x, y, mask, cache_key = None, None, None, None
         if len(batch) == 2:
             x, y = batch
             cache_key = None
         elif len(batch) == 3:
             x, y, cache_key = batch
-        out = self(x, cache_key=cache_key)
+        elif len(batch) == 4:
+            x, mask, y, cache_key = batch
+        out = self(x, mask, cache_key=cache_key)
         loss = self.loss_fn(out, y)
         return loss, {'ce': loss}, out
 
-    def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor, Any]], cache_key: Any = None) -> torch.Tensor:
+    def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor, Any]], mask: torch.BoolTensor = None, cache_key: Any = None) -> torch.Tensor:
         if self.patch_embed is not None:
             if self.patch_embed_caching:
                 assert cache_key is not None, \
@@ -116,12 +130,27 @@ class PatchAttentionClassifier(VisiomelClassifier):
             # (B, C, H, W) -> (B, L, E)
             x = self.patch_embed(x, cache_key=cache_key)
 
-        # (B, L, E) -> (B, C, E)
-        x = self.pooling(x)
-        # (B, C, E) -> (B, C, 2)
-        x = self.classifier(x)
-        # (B, C, 2) -> (B, 2) if C == 1 else (B, C, 2) -> (B, C, 2)
+        # (B, L, E) -> (B, 1, E)
+        x = self.pooling(x, mask=mask)
+        # (B, 1, E) -> (B, E)
         x = x.squeeze(1)
+        # (B, E) -> (B, 2)
+        x = self.classifier(x)
         
         return x
     
+    def update_train_metrics(self, preds, batch):
+        """Update train metrics."""
+        y, y_pred = batch[2].detach(), preds[:, 1].detach()
+        for _, metric in self.train_metrics.items():
+            metric.update(y_pred, y)
+
+    def update_val_metrics(self, preds, batch, dataloader_idx=0):
+        """Update val metrics."""
+        y, y_pred = batch[2].detach(), preds[:, 1].detach()
+        if dataloader_idx == 0:
+            for _, metric in self.val_metrics.items():
+                metric.update(y_pred, y)
+        else:
+            for _, metric in self.val_metrics_downsampled.items():
+                metric.update(y_pred, y)
