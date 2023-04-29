@@ -45,6 +45,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         attention_hidden_dim: int = 64,
         patch_embed_caching: bool = False,
         emb_precalc: bool = False,
+        emb_precalc_dim: int = 1024,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -87,7 +88,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
             self.patch_embed = None
         self.pooling = PatchAttentionPooling(
             n_classes=num_classes if num_classes > 2 else 1, 
-            embed_dim=backbone.num_features,
+            embed_dim=emb_precalc_dim,
             hidden_dim=attention_hidden_dim
         )
         self.classifier = nn.Linear(attention_hidden_dim, 2)
@@ -108,14 +109,13 @@ class PatchAttentionClassifier(VisiomelClassifier):
         return loss, {'ce': loss}, out
 
     def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor, Any]], cache_key: Any = None) -> torch.Tensor:
-        if self.patch_embed is None:
+        if self.patch_embed is not None:
             if self.patch_embed_caching:
                 assert cache_key is not None, \
                     'Cache key must be provided when patch embedding caching is enabled'
             # (B, C, H, W) -> (B, L, E)
             x = self.patch_embed(x, cache_key=cache_key)
-        else:
-            pass
+
         # (B, L, E) -> (B, C, E)
         x = self.pooling(x)
         # (B, C, E) -> (B, C, 2)
