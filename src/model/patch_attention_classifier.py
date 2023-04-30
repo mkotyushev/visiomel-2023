@@ -141,13 +141,13 @@ class PatchAttentionClassifier(VisiomelClassifier):
     
     def update_train_metrics(self, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[2].detach(), preds[:, 1].detach()
+        y, y_pred = batch[2].detach().cpu(), preds[:, 1].detach().cpu().float()
         for _, metric in self.train_metrics.items():
             metric.update(y_pred, y)
 
     def update_val_metrics(self, preds, batch, dataloader_idx=0):
         """Update val metrics."""
-        y, y_pred = batch[2].detach(), preds[:, 1].detach()
+        y, y_pred = batch[2].detach().cpu(), preds[:, 1].detach().cpu().float()
         if dataloader_idx == 0:
             for _, metric in self.val_metrics.items():
                 metric.update(y_pred, y)

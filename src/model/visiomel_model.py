@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
 from torch.nn import ModuleDict
 from pytorch_lightning.cli import instantiate_class
-from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
+from torchmetrics.classification import BinaryAccuracy, BinaryF1Score, BinaryAUROC
 from pytorch_lightning.utilities import grad_norm
 
 from utils.utils import state_norm, LogLossScore
@@ -287,29 +287,30 @@ class VisiomelClassifier(VisiomelModel):
         """Configure task-specific metrics."""
         self.train_metrics = ModuleDict(
             {
-                'll': LogLossScore()
+                'll': LogLossScore().cpu(),
             }
         )
         self.val_metrics = ModuleDict(
             {
-                'll': LogLossScore()
+                'll': LogLossScore().cpu(),
+                'auc': BinaryAUROC().cpu(),
             }
         )
         self.val_metrics_downsampled = ModuleDict(
             {
-                'ds_ll': LogLossScore()
+                'ds_ll': LogLossScore().cpu(),
             }
         )
 
     def update_train_metrics(self, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[1].detach(), preds[:, 1].detach()
+        y, y_pred = batch[1].detach().cpu(), preds[:, 1].detach().cpu().float()
         for _, metric in self.train_metrics.items():
             metric.update(y_pred, y)
 
     def update_val_metrics(self, preds, batch, dataloader_idx=0):
         """Update val metrics."""
-        y, y_pred = batch[1].detach(), preds[:, 1].detach()
+        y, y_pred = batch[1].detach().cpu(), preds[:, 1].detach().cpu().float()
         if dataloader_idx == 0:
             for _, metric in self.val_metrics.items():
                 metric.update(y_pred, y)
