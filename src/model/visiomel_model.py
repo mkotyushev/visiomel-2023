@@ -1,14 +1,16 @@
 import logging
+from matplotlib import pyplot as plt
+import numpy as np
 from pytorch_lightning import LightningModule
 from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
 from torch.nn import ModuleDict
 from pytorch_lightning.cli import instantiate_class
-from torchmetrics.classification import BinaryAccuracy, BinaryF1Score, BinaryAUROC
+from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryConfusionMatrix
 from pytorch_lightning.utilities import grad_norm
 
-from utils.utils import state_norm, LogLossScore
+from utils.utils import state_norm, LogLossScore, build_cm_heatmap
 
 
 logger = logging.getLogger(__name__)
@@ -111,20 +113,29 @@ class VisiomelModel(LightningModule):
         self.update_val_metrics(preds, batch, dataloader_idx)
         return total_loss
 
+    def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
+        self.log(
+            name,
+            metric.compute(),
+            on_step=on_step,
+            on_epoch=on_epoch,
+            prog_bar=prog_bar,
+        )
+        metric.reset()
+
     def on_train_epoch_end(self) -> None:
         """Called in the training loop at the very end of the epoch."""
         if self.train_metrics is None:
             return
         for name, metric in self.train_metrics.items():
             prog_bar = (name == 'f1' or name == 'ce')
-            self.log(
+            self.log_metric_and_reset(
                 f'train_{name}',
-                metric.compute(),
+                metric,
                 on_step=False,
                 on_epoch=True,
                 prog_bar=prog_bar,
             )
-            metric.reset()
     
     def on_validation_epoch_end(self) -> None:
         """Called in the validation loop at the very end of the epoch."""
@@ -132,27 +143,25 @@ class VisiomelModel(LightningModule):
             return
         for name, metric in self.val_metrics.items():
             prog_bar = (name == 'f1')
-            self.log(
+            self.log_metric_and_reset(
                 f'val_{name}',
-                metric.compute(),
+                metric,
                 on_step=False,
                 on_epoch=True,
                 prog_bar=prog_bar,
             )
-            metric.reset()
         
         if self.val_metrics_downsampled is None:
             return
         for name, metric in self.val_metrics_downsampled.items():
             prog_bar = (name == 'ds_ce')
-            self.log(
+            self.log_metric_and_reset(
                 f'val_{name}',
-                metric.compute(),
+                metric,
                 on_step=False,
                 on_epoch=True,
                 prog_bar=prog_bar,
             )
-            metric.reset()
 
     def get_lr_decayed(self, lr, layer_index, layer_name):
         """
@@ -283,6 +292,24 @@ class VisiomelClassifier(VisiomelModel):
         )
         self.save_hyperparameters()
 
+    def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
+        if isinstance(metric, BinaryConfusionMatrix):
+            figure = build_cm_heatmap(metric.compute())
+            self.trainer.logger.experiment.log(
+                {
+                    f'{name}_{self.current_epoch}': figure,
+                },
+            )
+        else:
+            self.log(
+                name,
+                metric.compute(),
+                on_step=on_step,
+                on_epoch=on_epoch,
+                prog_bar=prog_bar,
+            )
+        metric.reset()
+
     def configure_metrics(self):
         """Configure task-specific metrics."""
         self.train_metrics = ModuleDict(
@@ -294,6 +321,8 @@ class VisiomelClassifier(VisiomelModel):
             {
                 'll': LogLossScore().cpu(),
                 'auc': BinaryAUROC().cpu(),
+                'f1': BinaryF1Score().cpu(),
+                'cm': BinaryConfusionMatrix().cpu(),
             }
         )
         self.val_metrics_downsampled = ModuleDict(

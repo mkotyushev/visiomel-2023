@@ -150,7 +150,11 @@ class PatchAttentionClassifier(VisiomelClassifier):
         y, y_pred = batch[2].detach().cpu(), preds[:, 1].detach().cpu().float()
         if dataloader_idx == 0:
             for _, metric in self.val_metrics.items():
+                # bug in BinaryConfusionMatrix resets it to GPU
+                metric = metric.cpu()
                 metric.update(y_pred, y)
         else:
             for _, metric in self.val_metrics_downsampled.items():
+                # bug in BinaryConfusionMatrix resets it to GPU
+                metric = metric.cpu()
                 metric.update(y_pred, y)
