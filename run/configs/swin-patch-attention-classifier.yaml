@@ -1,7 +1,7 @@
 trainer:
   # limit_train_batches: 10
   # limit_val_batches: 10
-  max_epochs: 100
+  max_epochs: 50
   num_sanity_val_steps: 0
   accumulate_grad_batches: 1
   reload_dataloaders_every_n_epochs: 0
@@ -28,7 +28,7 @@ model:
     patch_embed_backbone_ckpt_path: /workspace/visiomel-2023/weights/val_ssup_patches/checkpoints/last.ckpt
     patch_size: 1536
     patch_batch_size: 16
-    attention_hidden_dim: 256
+    attention_hidden_dim: 32
     patch_embed_caching: false
     emb_precalc: true
     emb_precalc_dim: 1024
@@ -74,6 +74,10 @@ data:
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_1/embeddings/val_aug.pkl
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_2/embeddings/val_aug.pkl
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_3/embeddings/val_aug.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_0/embeddings/val.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_1/embeddings/val.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_2/embeddings/val.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_3/embeddings/val.pkl
     use_no_repeats_for_val: true
     k: 5
     fold_index: 0
