@@ -9,6 +9,7 @@ import timm
 import torch
 import torch.nn.functional as F
 import pandas as pd
+import pickle
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
@@ -507,3 +508,59 @@ def build_cm_heatmap(cm, classes=None):
     annotate_heatmap(image, valfmt="{x:d}")
 
     return figure
+
+
+def duplicated_tensors(series, keep='first'):
+    """"Return boolean mask of duplicated tensors in series.
+    """
+    lens = series.apply(lambda x: np.prod(x.shape))
+    hashes = series.apply(
+        lambda x: hash(x.flatten().numpy().tobytes())
+    )
+    return pd.DataFrame(
+        {
+            'len': lens,
+            'hash': hashes,
+        }
+    ).duplicated(keep=keep)
+
+
+def deduplicate_repeated_augs(df):
+    """
+    Deduplicate repeated augmentations DataFrame.
+
+    Somehow repeating random transform on embedding generation 
+    ends up with duplicated embeddings. Approach below deduplicate 
+    each DataFrame. Given that dataframes (folds) does not 
+    intersect, it deduplicates whole dataset.
+    """
+    duplicated_path = df['path'].duplicated(keep='first').values
+    duplicated_label = df['label'].apply(lambda x: x.item()).duplicated(keep='first').values
+    duplicated_features = duplicated_tensors(df['features'], keep='first').values
+    return df[~(duplicated_features & duplicated_label & duplicated_path)]
+
+
+def check_no_pairwise_intersection(dfs):
+    for i in range(len(dfs)):
+        for j in range(i+1, len(dfs)):
+            assert len(set(dfs[i]['path'].values).intersection(dfs[j]['path'].values)) == 0
+
+
+def check_unique_pathes_same(df1, df2):
+    pathes1 = sorted(list(set(df1['path'].values)))
+    pathes2 = sorted(list(set(df2['path'].values)))
+    assert pathes1 == pathes2
+
+
+def load_embeddings(pathes):
+    dfs = dict()
+    for path in pathes:
+        logging.info(f'path: {path}')
+        with open(path, 'rb') as f:
+            df = pickle.load(f)
+        logging.info(f'\traw shape: {df.shape}')
+        df = deduplicate_repeated_augs(df)
+        logging.info(f'\tdeduplicated shape: {df.shape}')
+        dfs[path] = df
+    check_no_pairwise_intersection(list(dfs.values()))
+    return dfs

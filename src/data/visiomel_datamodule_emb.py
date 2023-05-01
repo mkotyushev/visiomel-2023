@@ -10,6 +10,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data._utils.collate import default_collate
 
 from .visiomel_datamodule import SubsetDataset, build_downsampled_dataset, build_weighted_sampler
+from src.utils.utils import load_embeddings
 
 
 logger = logging.getLogger(__name__)
@@ -17,14 +18,7 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingDataset:
     def __init__(self, pkl_pathes: List[str]) -> None:
-        self.data = None
-        for path in pkl_pathes:
-            with open(path, 'rb') as f:
-                data = pickle.load(f)
-                if self.data is None:
-                    self.data = data
-                else:
-                    self.data = pd.concat([self.data, data])
+        self.data = pd.concat(load_embeddings(pkl_pathes).values())
         self.data['features'] = self.data['features'].apply(lambda x: np.array(x).squeeze(0))
         self.data['label'] = self.data['label'].apply(np.array)
         self.data['file_index'] = self.data.groupby('path').ngroup()
