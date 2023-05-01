@@ -97,10 +97,10 @@ class PatchAttentionClassifier(VisiomelClassifier):
         self.classifier = nn.Sequential(
             nn.Linear(attention_hidden_dim, attention_hidden_dim // 2),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(attention_hidden_dim // 2),
+            nn.LayerNorm(attention_hidden_dim // 2),
             nn.Linear(attention_hidden_dim // 2, attention_hidden_dim // 4),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(attention_hidden_dim // 4),
+            nn.LayerNorm(attention_hidden_dim // 4),
             nn.Linear(attention_hidden_dim // 4, 2),
         )
         self.loss_fn = nn.CrossEntropyLoss()
