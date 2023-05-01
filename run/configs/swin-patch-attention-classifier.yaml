@@ -60,6 +60,7 @@ model:
       unfreeze_layer_names_startswith:
         - pooling
         - classifier
+    label_smoothing: 0.0
 data:
   class_path: src.data.visiomel_datamodule_emb.VisiomelDatamoduleEmb
   init_args:
