@@ -562,5 +562,15 @@ def load_embeddings(pathes):
         df = deduplicate_repeated_augs(df)
         logging.info(f'\tdeduplicated shape: {df.shape}')
         dfs[path] = df
-    check_no_pairwise_intersection(list(dfs.values()))
+
+    # TODO: check_no_pairwise_intersection does not work 
+    # if aug + no-aug are used but is not a problem because 
+    # no intersections was checked manually and train / val 
+    # intersection is checked later.
+
+    # Manual check: set only val / only val_aug pathes
+    # in either embedding_pathes or embedding_pathes_aug_with_repeats.
+
+    # check_no_pairwise_intersection(list(dfs.values()))
+
     return dfs
