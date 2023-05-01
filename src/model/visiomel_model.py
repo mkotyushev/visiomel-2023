@@ -7,10 +7,10 @@ from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
 from torch.nn import ModuleDict
 from pytorch_lightning.cli import instantiate_class
-from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryConfusionMatrix
+from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryStatScores
 from pytorch_lightning.utilities import grad_norm
 
-from utils.utils import state_norm, LogLossScore, build_cm_heatmap
+from utils.utils import state_norm, LogLossScore
 
 
 logger = logging.getLogger(__name__)
@@ -293,13 +293,16 @@ class VisiomelClassifier(VisiomelModel):
         self.save_hyperparameters()
 
     def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
-        if isinstance(metric, BinaryConfusionMatrix):
-            figure = build_cm_heatmap(metric.compute())
-            self.trainer.logger.experiment.log(
-                {
-                    f'{name}_{self.current_epoch}': figure,
-                },
-            )
+        if type(metric) is BinaryStatScores:  # no isinstance because other classes inherit from it
+            scores = metric.compute()
+            for k, v in zip(['tp', 'fp', 'tn', 'fn', 'sup'], scores):
+                self.log(
+                    f'{k}',
+                    v,
+                    on_step=on_step,
+                    on_epoch=on_epoch,
+                    prog_bar=prog_bar,
+                )
         else:
             self.log(
                 name,
@@ -322,7 +325,7 @@ class VisiomelClassifier(VisiomelModel):
                 'll': LogLossScore().cpu(),
                 'auc': BinaryAUROC().cpu(),
                 'f1': BinaryF1Score().cpu(),
-                'cm': BinaryConfusionMatrix().cpu(),
+                'bss': BinaryStatScores().cpu(),
             }
         )
         self.val_metrics_downsampled = ModuleDict(
