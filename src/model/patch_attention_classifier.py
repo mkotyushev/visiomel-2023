@@ -49,6 +49,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         patch_embed_caching: bool = False,
         emb_precalc: bool = False,
         emb_precalc_dim: int = 1024,
+        label_smoothing: float = 0.0,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -57,6 +58,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
             finetuning=finetuning,
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
+            label_smoothing=label_smoothing,
         )
         self.save_hyperparameters()
 

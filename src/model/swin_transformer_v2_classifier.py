@@ -29,6 +29,7 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         grad_checkpointing: bool = False,
         drloc_params: Optional[Dict[str, Any]] = None,
+        label_smoothing: float = 0.0,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -37,6 +38,7 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
             finetuning=finetuning, 
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
+            label_smoothing=label_smoothing,
         )
         self.save_hyperparameters()
 

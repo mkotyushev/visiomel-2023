@@ -22,6 +22,7 @@ class QuadtreeClassifier(VisiomelClassifier):
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        label_smoothing: float = 0.0,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -30,6 +31,7 @@ class QuadtreeClassifier(VisiomelClassifier):
             finetuning=finetuning, 
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
+            label_smoothing=label_smoothing,
         )
         self.save_hyperparameters()
 
