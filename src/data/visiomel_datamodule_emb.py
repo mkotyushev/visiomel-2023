@@ -21,15 +21,15 @@ class EmbeddingDataset:
         self.data = pd.concat(load_embeddings(pkl_pathes).values())
         self.data['features'] = self.data['features'].apply(lambda x: np.array(x).squeeze(0))
         self.data['label'] = self.data['label'].apply(np.array)
-        self.data['file_index'] = self.data.groupby('path').ngroup()
+        self.data['group'] = self.data['path']
 
     @property
     def targets(self):
         return self.data['label'].values
     
     @property
-    def file_indices(self):
-        return self.data['file_index'].values
+    def groups(self):
+        return self.data['group'].values
 
     def __len__(self):
         return len(self.data)
@@ -98,27 +98,30 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         """Setup data."""
         if self.train_dataset is None:
             if self.hparams.k is not None:
-                # Split by k-fold embeddings with repeats (used for train)
-                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
+                # Split by k-fold embeddings with no repeats (used for val)
+                dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
                 kfold = StratifiedGroupKFold(
                     n_splits=self.hparams.k, 
                     shuffle=True, 
                     random_state=self.hparams.split_seed
                 )
-                split = list(kfold.split(dataset_with_repeats, dataset_with_repeats.targets.astype(int), dataset_with_repeats.file_indices))
-                train_indices_with_repeats, val_indices_with_repeats = split[self.hparams.fold_index]
+                split = list(kfold.split(dataset_no_repeats, dataset_no_repeats.targets.astype(int), dataset_no_repeats.groups))
+                train_indices_no_repeats, val_indices_no_repeats = split[self.hparams.fold_index]
 
-                # Get validation filenames from split
-                val_filenames = dataset_with_repeats.data.iloc[val_indices_with_repeats]['path'].values
-
-                # Get indices for embeddings without repeats by filenames (used for validation)
-                dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
-                val_indices_no_repeats = np.arange(len(dataset_no_repeats))[
-                    dataset_no_repeats.data['path'].isin(val_filenames).values
+                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
+                
+                # Get indices for embeddings with repeats by filenames (used for train)
+                train_filenames = dataset_no_repeats.data.iloc[train_indices_no_repeats]['path'].values
+                no_repeats_to_with_repeats_train_mask = dataset_with_repeats.data['path'].isin(train_filenames).values
+                
+                train_indices_with_repeats = np.arange(len(dataset_with_repeats))[
+                    no_repeats_to_with_repeats_train_mask
+                ]
+                val_indices_with_repeats = np.arange(len(dataset_with_repeats))[
+                    ~no_repeats_to_with_repeats_train_mask
                 ]
 
-                # Use dataset with repeats train split for train and 
-                # dataset without repeats val split for val
+                # Use dataset with repeats train split for train 
                 train_subset = Subset(dataset_with_repeats, train_indices_with_repeats)
 
                 # Do not actually use dataset without repeats val split for val
