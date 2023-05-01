@@ -236,6 +236,7 @@ class VisiomelDatamodule(LightningDataModule):
         model_patch_size: int = 4,
         mask_ratio: float = 0.6,
         train_transform_n_repeats: Optional[int] = None,
+        val_repeats_aug: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -343,6 +344,10 @@ class VisiomelDatamodule(LightningDataModule):
             train_random_transform = IdentityTransform()
             simmim_transform = IdentityTransform()
 
+        val_random_transform = IdentityTransform()
+        if self.hparams.val_repeats_aug:
+            val_random_transform = train_random_transform
+
         self.train_transform = Compose(
             [
                 train_resize_transform,
@@ -355,6 +360,7 @@ class VisiomelDatamodule(LightningDataModule):
         self.val_transform = self.test_transform = Compose(
             [
                 val_resize_transform,
+                val_random_transform,
                 ToTensor(),
                 Normalize(mean=torch.tensor(IMAGENET_DEFAULT_MEAN), std=torch.tensor(IMAGENET_DEFAULT_STD)),
                 simmim_transform,
@@ -386,9 +392,14 @@ class VisiomelDatamodule(LightningDataModule):
                 train_subset, val_subset = \
                     Subset(dataset, train_indices), Subset(dataset, val_indices)
                 
+                train_n_repeats = self.hparams.train_transform_n_repeats
+                val_n_repeats = 1
+                if self.hparams.val_repeats_aug:
+                    val_n_repeats = train_n_repeats
+
                 self.train_dataset, self.val_dataset = \
-                    SubsetDataset(train_subset, transform=self.train_transform, n_repeats=self.hparams.train_transform_n_repeats), \
-                    SubsetDataset(val_subset, transform=self.val_transform, n_repeats=1)
+                    SubsetDataset(train_subset, transform=self.train_transform, n_repeats=train_n_repeats), \
+                    SubsetDataset(val_subset, transform=self.val_transform, n_repeats=val_n_repeats)
                 self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
             else:
                 self.train_dataset = VisiomelImageFolder(
