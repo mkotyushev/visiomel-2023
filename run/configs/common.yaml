@@ -15,7 +15,8 @@ trainer:
     #     patience: 30
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        monitor: val_ds_ll
+        monitor: val_f1
+        mode: max
         save_top_k: 5
         save_on_train_epoch_end: false
         save_last: true
