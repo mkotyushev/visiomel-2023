@@ -64,8 +64,10 @@ data:
   class_path: src.data.visiomel_datamodule_emb.VisiomelDatamoduleEmb
   init_args:
     embedding_pathes: 
-      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_0/embeddings/train.pkl
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_0/embeddings/val_aug.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_1/embeddings/val_aug.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_2/embeddings/val_aug.pkl
+      - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_3/embeddings/val_aug.pkl
     k: 5
     fold_index: 0
     split_seed: 0
