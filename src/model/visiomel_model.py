@@ -299,8 +299,8 @@ class VisiomelClassifier(VisiomelModel):
             scores = metric.compute()
             for k, v in zip(['tp', 'fp', 'tn', 'fn', 'sup'], scores):
                 self.log(
-                    f'{k}',
-                    v,
+                    f'{name}_{k}',
+                    v.float(),
                     on_step=on_step,
                     on_epoch=on_epoch,
                     prog_bar=prog_bar,
@@ -320,6 +320,9 @@ class VisiomelClassifier(VisiomelModel):
         self.train_metrics = ModuleDict(
             {
                 'll': LogLossScore().cpu(),
+                'auc': BinaryAUROC().cpu(),
+                'f1': BinaryF1Score().cpu(),
+                'bss': BinaryStatScores().cpu(),
             }
         )
         self.val_metrics = ModuleDict(
@@ -333,6 +336,7 @@ class VisiomelClassifier(VisiomelModel):
         self.val_metrics_downsampled = ModuleDict(
             {
                 'ds_ll': LogLossScore().cpu(),
+                'ds_bss': BinaryStatScores().cpu(),
             }
         )
 
