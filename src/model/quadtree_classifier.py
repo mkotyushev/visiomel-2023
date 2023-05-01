@@ -67,7 +67,7 @@ class QuadtreeClassifier(VisiomelClassifier):
     def compute_loss_preds(self, batch, random_split=False):
         x, y = batch
         preds, split_decision_logits = self(x, random_split=False)
-        loss = F.cross_entropy(preds, y)
+        loss = self.loss_fn(preds, y)
         
         if not random_split:
             return loss, {'ce': loss}, preds

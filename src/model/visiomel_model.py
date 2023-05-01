@@ -5,7 +5,7 @@ from pytorch_lightning import LightningModule
 from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
-from torch.nn import ModuleDict
+from torch.nn import ModuleDict, CrossEntropyLoss
 from pytorch_lightning.cli import instantiate_class
 from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryStatScores
 from pytorch_lightning.utilities import grad_norm
@@ -281,6 +281,7 @@ class VisiomelClassifier(VisiomelModel):
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        label_smoothing: float = 0.0,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -291,6 +292,7 @@ class VisiomelClassifier(VisiomelModel):
             lr_layer_decay=lr_layer_decay,
         )
         self.save_hyperparameters()
+        self.loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
 
     def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
         if type(metric) is BinaryStatScores:  # no isinstance because other classes inherit from it

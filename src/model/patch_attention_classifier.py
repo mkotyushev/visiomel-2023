@@ -103,7 +103,6 @@ class PatchAttentionClassifier(VisiomelClassifier):
             nn.LayerNorm(attention_hidden_dim // 4),
             nn.Linear(attention_hidden_dim // 4, 2),
         )
-        self.loss_fn = nn.CrossEntropyLoss()
 
         self.patch_embed_caching = patch_embed_caching
 

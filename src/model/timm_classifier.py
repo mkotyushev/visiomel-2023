@@ -32,7 +32,6 @@ class TimmClassifier(VisiomelClassifier):
 
         self.classifier = timm.create_model(backbone_name, pretrained=pretrained, num_classes=num_classes)
         self.classifier.set_grad_checkpointing(grad_checkpointing)
-        self.loss_fn = nn.CrossEntropyLoss()
 
         # TODO: called in each VisiomelModel subclass but after subclass __init__
         # need to move to VisiomelModel somehow

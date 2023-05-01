@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Dict, Optional, Union
 from torch import Tensor
-from torch.nn import CrossEntropyLoss
 
 from src.model.visiomel_model import VisiomelClassifier
 from utils.utils import build_model
@@ -63,7 +62,6 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
         if patch_embed_backbone_name is not None:
             self.model.proj.backbone.set_grad_checkpointing(grad_checkpointing)
 
-        self.loss_fn = CrossEntropyLoss()
         if self.hparams.drloc_params is not None:
             self.criterion_ssup = cal_selfsupervised_loss
 
