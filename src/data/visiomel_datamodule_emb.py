@@ -68,6 +68,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
     def __init__(
         self,
         embedding_pathes: List[str],	
+        embedding_pathes_aug_with_repeats: List[str],	
         batch_size: int = 32,
         k: int = None,
         fold_index: int = 0,
@@ -95,19 +96,31 @@ class VisiomelDatamoduleEmb(LightningDataModule):
     def setup(self, stage=None) -> None:
         """Setup data."""
         if self.train_dataset is None:
-            # Train dataset
             if self.hparams.k is not None:
-                dataset = EmbeddingDataset(self.hparams.embedding_pathes)
+                # Split by k-fold embeddings with no repeats (used for val)
+                dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
                 kfold = StratifiedGroupKFold(
                     n_splits=self.hparams.k, 
                     shuffle=True, 
                     random_state=self.hparams.split_seed
                 )
-                split = list(kfold.split(dataset, dataset.targets.astype(int), dataset.file_indices))
-                train_indices, val_indices = split[self.hparams.fold_index]
+                split = list(kfold.split(dataset_no_repeats, dataset_no_repeats.targets.astype(int), dataset_no_repeats.file_indices))
+                train_indices_no_repeats, val_indices_no_repeats = split[self.hparams.fold_index]
 
+                # Get train filenames from split
+                train_filenames = dataset_no_repeats.data.iloc[train_indices_no_repeats]['path'].values
+
+                # Get indices for embeddings with repeats by filenames (used for train)
+                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
+                train_indices_with_repeats = np.arange(len(dataset_with_repeats))[
+                    dataset_with_repeats.data['path'].isin(train_filenames).values
+                ]
+
+                # Use dataset with repeats train split for train and 
+                # dataset without repeats val split for val
                 train_subset, val_subset = \
-                    Subset(dataset, train_indices), Subset(dataset, val_indices)
+                    Subset(dataset_with_repeats, train_indices_with_repeats), \
+                    Subset(dataset_no_repeats, val_indices_no_repeats)
                 
                 self.train_dataset, self.val_dataset = \
                     SubsetDataset(train_subset, transform=None, n_repeats=1), \
