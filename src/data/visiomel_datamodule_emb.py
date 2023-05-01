@@ -64,6 +64,12 @@ def masked_collate_fn(batch):
     return X, mask, y, paths
 
 
+def check_no_split_intersection(train_subset: Subset, val_subset: Subset):
+    train_filenames = set([train_subset.dataset.data.iloc[i]['path'] for i in train_subset.indices])
+    val_filenames = set([val_subset.dataset.data.iloc[i]['path'] for i in val_subset.indices])
+    assert len(train_filenames & val_filenames) == 0, "train and val datasets intersect"
+
+
 class VisiomelDatamoduleEmb(LightningDataModule):
     def __init__(
         self,
@@ -127,6 +133,10 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                     val_subset = Subset(dataset_no_repeats, val_indices_no_repeats)
                 else:
                     val_subset = Subset(dataset_with_repeats, val_indices_with_repeats)
+
+                # Check that train and val datasets do not intersect
+                # in terms of filenames
+                check_no_split_intersection(train_subset, val_subset)
                 
                 self.train_dataset, self.val_dataset = \
                     SubsetDataset(train_subset, transform=None, n_repeats=1), \
