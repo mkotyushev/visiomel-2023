@@ -19,7 +19,7 @@ Worker = collections.namedtuple("Worker", ("queue", "process"))
 WorkerInitData = collections.namedtuple(
     "WorkerInitData", ("fold_index", "sweep_id", "sweep_run_name", "config")
 )
-WorkerDoneData = collections.namedtuple("WorkerDoneData", ("score"))
+WorkerDoneData = collections.namedtuple("WorkerDoneData", ("scores"))
 
 
 def reset_wandb_env():
@@ -46,7 +46,7 @@ def train(sweep_q, worker_q):
     )
 
     args = sys.argv[1:] + ['--data.init_args.fold_index', f'{worker_data.fold_index}']
-    score = float('-inf')
+    scores = dict()
     try:
         with TempSetContextManager(sys, 'argv', sys.argv[:1]):
             cli = MyLightningCLI(
@@ -58,13 +58,14 @@ def train(sweep_q, worker_q):
                 args=args,
                 run=True,
             )
-        score = cli.trainer.checkpoint_callback.state_dict()["best_model_score"]
+        for cb in cli.trainer.checkpoint_callbacks:
+            scores[cb.monitor] = cb.best_model_score.item()
     except Exception as e:
         print(e)
 
-    run.log(dict(score=score))
+    run.log(scores)
     wandb.join()
-    sweep_q.put(WorkerDoneData(score=score))
+    sweep_q.put(WorkerDoneData(scores=scores))
 
 
 class TempSetContextManager:
@@ -129,16 +130,19 @@ def main():
             )
         )
 
-    scores = {}
+    scores = collections.defaultdict(list)
     for fold_index in range(cli.config.data.init_args.k):
         # get metric from worker
         result = sweep_q.get()
         # wait for worker to finish
         worker.process.join()
         # log metric to sweep_run
-        scores[fold_index] = result.score
+        for name, value in result.scores:
+            scores[name].append(value)
 
-    sweep_run.log(dict(score=sum(scores.values()) / len(scores)))
+    scores_mean = {name: sum(values) / len(values) for name, values in scores.items()}
+
+    sweep_run.log(scores_mean)
     wandb.join()
 
     print("*" * 40)
