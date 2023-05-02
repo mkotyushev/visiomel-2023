@@ -41,7 +41,7 @@ parameters:
   data.init_args.sampler:
     distribution: categorical
     values:
-    - null
+    - none
     - weighted_upsampling
   model.init_args.attention_dropout:
     distribution: uniform
