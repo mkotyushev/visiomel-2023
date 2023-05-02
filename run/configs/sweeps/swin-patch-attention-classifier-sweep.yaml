@@ -10,7 +10,7 @@ command:
 method: bayes
 metric:
   goal: maximize
-  name: mean_best_val_f1
+  name: mean_best_val_pf1s
 parameters:
   trainer.max_epochs:
     distribution: categorical
