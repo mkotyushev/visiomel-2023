@@ -20,6 +20,14 @@ trainer:
         mode: max
         save_on_train_epoch_end: false
         save_last: true
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        save_top_k: 1
+        monitor: val_ds_ll
+        every_n_epochs: 1
+        mode: min
+        save_on_train_epoch_end: false
+        save_last: false
 model:
   class_path: src.model.patch_attention_classifier.PatchAttentionClassifier
   init_args:
