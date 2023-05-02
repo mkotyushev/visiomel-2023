@@ -19,7 +19,7 @@ parameters:
     - 64
     - 128
     - 256
-  optimizer.init_args.lr:
+  model.lr:
     distribution: log_uniform_values
     max: 0.1
     min: 0.0001
