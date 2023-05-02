@@ -76,6 +76,8 @@ model:
     patch_size: 1536
     patch_batch_size: 16
     attention_hidden_dim: 256
+    attention_num_heads: 1
+    attention_dropout: 0.2
     patch_embed_caching: false
     emb_precalc: true
     emb_precalc_dim: 1024

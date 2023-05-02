@@ -8,15 +8,15 @@ from model.visiomel_model import VisiomelClassifier
 
 
 class PatchAttentionPooling(nn.Module):
-    def __init__(self, n_classes, embed_dim=1536, hidden_dim=64):
+    def __init__(self, n_classes, embed_dim=1536, hidden_dim=64, num_heads=1, dropout=0.2):
         super().__init__()
         self.class_emb = nn.Parameter(torch.randn(1, n_classes, hidden_dim))
         self.attention = nn.MultiheadAttention(
             embed_dim=hidden_dim, 
             kdim=embed_dim,
             vdim=embed_dim,
-            num_heads=1, 
-            dropout=0.2, 
+            num_heads=num_heads, 
+            dropout=dropout, 
             batch_first=True
         )
 
@@ -25,7 +25,7 @@ class PatchAttentionPooling(nn.Module):
         query = self.class_emb.repeat(B, 1, 1)
         # key and value are the same, so mask should be
         # the same for both
-        attn_mask = mask.unsqueeze(1)
+        attn_mask = mask.unsqueeze(1).repeat(self.attention.num_heads, 1, 1)
         x, _ = self.attention(query, x, x, attn_mask=attn_mask, key_padding_mask=mask)
         return x
 
@@ -51,6 +51,8 @@ class PatchAttentionClassifier(VisiomelClassifier):
         emb_precalc_dim: int = 1024,
         label_smoothing: float = 0.0,
         lr: float = 1e-3,
+        attention_num_heads: int = 2,
+        attention_dropout: float = 0.2,
     ):
         # Hack to make wandb CV work with nested dicts
         optimizer_init['init_args']['lr'] = lr
@@ -98,7 +100,9 @@ class PatchAttentionClassifier(VisiomelClassifier):
         self.pooling = PatchAttentionPooling(
             n_classes=num_classes if num_classes > 2 else 1, 
             embed_dim=emb_precalc_dim,
-            hidden_dim=attention_hidden_dim
+            hidden_dim=attention_hidden_dim,
+            num_heads=attention_num_heads,
+            dropout=attention_dropout,
         )
         self.classifier = nn.Sequential(
             nn.Linear(attention_hidden_dim, attention_hidden_dim // 2),
