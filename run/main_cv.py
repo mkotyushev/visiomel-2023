@@ -45,18 +45,19 @@ def train(sweep_q, worker_q):
         config=config,
     )
 
-    cv_args = ['--data.init_args.fold_index', f'{worker_data.fold_index}']
+    args = sys.argv[1:] + ['--data.init_args.fold_index', f'{worker_data.fold_index}']
     score = float('-inf')
     try:
-        cli = MyLightningCLI(
-            trainer_class=TrainerWandb, 
-            save_config_kwargs={
-                'config_filename': 'config_pl.yaml',
-                'overwrite': True,
-            },
-            args=sys.argv[1:] + cv_args,
-            run=True,
-        )
+        with TempSetContextManager(sys, 'argv', sys.argv[:1]):
+            cli = MyLightningCLI(
+                trainer_class=TrainerWandb, 
+                save_config_kwargs={
+                    'config_filename': 'config_pl.yaml',
+                    'overwrite': True,
+                },
+                args=args,
+                run=True,
+            )
         score = cli.trainer.checkpoint_callback.state_dict()["best_model_score"]
     except Exception as e:
         print(e)
@@ -66,17 +67,33 @@ def train(sweep_q, worker_q):
     sweep_q.put(WorkerDoneData(score=score))
 
 
+class TempSetContextManager:
+    def __init__(self, obj, attr, value):
+        self.obj = obj
+        self.attr = attr
+        self.value = value
+
+    def __enter__(self):
+        self.old_value = getattr(self.obj, self.attr)
+        setattr(self.obj, self.attr, self.value)
+
+    def __exit__(self, *args):
+        setattr(self.obj, self.attr, self.old_value)
+
+
 def main():
     # Parse args
-    cli = MyLightningCLI(
-        trainer_class=TrainerWandb, 
-        save_config_kwargs={
-            'config_filename': 'config_pl.yaml',
-            'overwrite': True,
-        },
-        args=[arg for arg in sys.argv[1:] if arg != 'fit'],
-        run=False,
-    )
+    args = sys.argv[1:]
+    with TempSetContextManager(sys, 'argv', sys.argv[:1]):
+        cli = MyLightningCLI(
+            trainer_class=TrainerWandb, 
+            save_config_kwargs={
+                'config_filename': 'config_pl.yaml',
+                'overwrite': True,
+            },
+            args=[arg for arg in args if arg != 'fit'],
+            run=False,
+        )
 
     # Spin up workers before calling wandb.init()
     # Workers will be blocked on a queue waiting to start
@@ -100,7 +117,6 @@ def main():
     sweep_run_name = sweep_run.name or sweep_run.id or "unknown"
 
     # Run CV
-    scores = {}
     for fold_index in range(cli.config.data.init_args.k):
         worker = workers[fold_index]
         # start worker
@@ -112,6 +128,9 @@ def main():
                 config=dict(sweep_run.config),
             )
         )
+
+    scores = {}
+    for fold_index in range(cli.config.data.init_args.k):
         # get metric from worker
         result = sweep_q.get()
         # wait for worker to finish
