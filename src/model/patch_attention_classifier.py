@@ -50,7 +50,11 @@ class PatchAttentionClassifier(VisiomelClassifier):
         emb_precalc: bool = False,
         emb_precalc_dim: int = 1024,
         label_smoothing: float = 0.0,
+        lr: float = 1e-3,
     ):
+        # Hack to make wandb CV work with nested dicts
+        optimizer_init['init_args']['lr'] = lr
+        
         super().__init__(
             optimizer_init=optimizer_init,
             lr_scheduler_init=lr_scheduler_init,
