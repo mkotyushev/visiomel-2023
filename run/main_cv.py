@@ -137,7 +137,7 @@ def main():
         # wait for worker to finish
         worker.process.join()
         # log metric to sweep_run
-        for name, value in result.scores:
+        for name, value in result.scores.items():
             scores[name].append(value)
 
     scores_mean = {name: sum(values) / len(values) for name, values in scores.items()}
