@@ -14,14 +14,17 @@ from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from torchvision.datasets.folder import default_loader
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, Any, Literal
 from model.patch_embed_with_backbone import SwinTransformerV2Modded
 from torchmetrics import Metric
+from torchmetrics.classification import BinaryFBetaScore
+from torchmetrics.utilities.compute import _safe_divide
 from mock import patch
 from sklearn.metrics import log_loss
 from tqdm import tqdm
 from sklearn.preprocessing import OneHotEncoder
 from matplotlib import pyplot as plt
+from torch import Tensor
 
 
 logger = logging.getLogger(__name__)
@@ -576,3 +579,56 @@ def load_embeddings(pathes):
     # check_no_pairwise_intersection(list(dfs.values()))
 
     return dfs
+
+
+class PenalizedBinaryFBetaScore(BinaryFBetaScore):
+    """
+    BinaryFBetaScore with additive penalty. Trying to penalize
+    F-beta metric in situations when one or both classes are
+    prediced "badly".
+
+    Note: binary stats scores are computed according threshold given
+    in initialization.
+
+    Penalty is:
+                class              penalty                      hard penalty        condition
+                0       1
+    quality     good    good       0                            0                   TPR > FNR and TNR > FPR
+                good    bad        TPR - FNR                    1                   TPR < FNR and TNR > FPR
+                bad     good       TNR - FPR                    1                   TPR > FNR and TNR < FPR
+                bad     bad        (TPR - FNR) + (TNR - FPR)    2                   TPR < FNR and TNR < FPR
+
+    Note: output limits are [-2, 1], higher is better.
+    """
+
+    def __init__(
+        self,
+        mode: Literal["soft", "hard"],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            *args,
+            **kwargs,
+        )
+        self.mode = mode
+
+    def compute(self) -> Tensor:
+        fbeta = super().compute()
+
+        tp, fp, tn, fn = self._final_state()
+        
+        tnr = _safe_divide(tn, tn + fp)
+        fpr = _safe_divide(fp, tn + fp)
+        fnr = _safe_divide(fn, tp + fn)
+        tpr = _safe_divide(tp, tp + fn)
+
+        p_diff_score = tpr - fnr  # higher is better, limits are [-1, 1]
+        n_diff_score = tnr - fpr  # higher is better, limits are [-1, 1]
+
+        p_penalty = 1 if self.mode == "hard" else p_diff_score
+        n_penalty = 1 if self.mode == "hard" else n_diff_score
+
+        penalty = (p_penalty if p_diff_score < 0 else 0) + (n_penalty if n_diff_score < 0 else 0)
+
+        return fbeta + penalty

@@ -10,7 +10,7 @@ from pytorch_lightning.cli import instantiate_class
 from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryStatScores
 from pytorch_lightning.utilities import grad_norm
 
-from utils.utils import state_norm, LogLossScore
+from utils.utils import state_norm, LogLossScore, PenalizedBinaryFBetaScore
 
 
 logger = logging.getLogger(__name__)
@@ -323,6 +323,7 @@ class VisiomelClassifier(VisiomelModel):
                 'auc': BinaryAUROC().cpu(),
                 'f1': BinaryF1Score().cpu(),
                 'bss': BinaryStatScores().cpu(),
+                'pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0).cpu(),
             }
         )
         self.val_metrics = ModuleDict(
@@ -331,12 +332,16 @@ class VisiomelClassifier(VisiomelModel):
                 'auc': BinaryAUROC().cpu(),
                 'f1': BinaryF1Score().cpu(),
                 'bss': BinaryStatScores().cpu(),
+                'pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0).cpu(),
             }
         )
         self.val_metrics_downsampled = ModuleDict(
             {
                 'ds_ll': LogLossScore().cpu(),
+                'ds_auc': BinaryAUROC().cpu(),
+                'ds_f1': BinaryF1Score().cpu(),
                 'ds_bss': BinaryStatScores().cpu(),
+                'ds_pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0).cpu(),
             }
         )
 
