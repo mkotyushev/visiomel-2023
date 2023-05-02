@@ -19,7 +19,7 @@ Worker = collections.namedtuple("Worker", ("queue", "process"))
 WorkerInitData = collections.namedtuple(
     "WorkerInitData", ("fold_index", "sweep_id", "sweep_run_name", "config")
 )
-WorkerDoneData = collections.namedtuple("WorkerDoneData", ("scores"))
+WorkerDoneData = collections.namedtuple("WorkerDoneData", ("scores", "fold_index"))
 
 
 def reset_wandb_env():
@@ -65,7 +65,7 @@ def train(sweep_q, worker_q):
 
     run.log(scores)
     wandb.join()
-    sweep_q.put(WorkerDoneData(scores=scores))
+    sweep_q.put(WorkerDoneData(scores=scores, fold_index=worker_data.fold_index))
 
 
 class TempSetContextManager:
@@ -117,7 +117,7 @@ def main():
     sweep_run.save()
     sweep_run_name = sweep_run.name or sweep_run.id or "unknown"
 
-    # Run CV
+    # Start CV
     for fold_index in range(cli.config.data.init_args.k):
         worker = workers[fold_index]
         # start worker
@@ -130,17 +130,25 @@ def main():
             )
         )
 
-    scores = collections.defaultdict(list)
-    for fold_index in range(cli.config.data.init_args.k):
+    # Collect results
+    scores = collections.defaultdict(dict)
+    for _ in range(cli.config.data.init_args.k):
         # get metric from worker
         result = sweep_q.get()
         # wait for worker to finish
         worker.process.join()
-        # log metric to sweep_run
+        # collect metric to dict & log metric to sweep_run
         for name, value in result.scores.items():
-            scores[name].append(value)
+            scores[name][result.fold_index] = value
+            sweep_run.log(
+                {
+                    name: value,
+                    "fold_index": result.fold_index,
+                }
+            )
 
-    scores_mean = {name: sum(values) / len(values) for name, values in scores.items()}
+    # Log mean of metrics
+    scores_mean = {name: sum(fold_index_to_score.values()) / len(fold_index_to_score) for name, fold_index_to_score in scores.items()}
 
     sweep_run.log(scores_mean)
     wandb.join()
