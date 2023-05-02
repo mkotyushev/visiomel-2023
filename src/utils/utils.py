@@ -251,6 +251,8 @@ class LogLossScore(Metric):
     def compute(self):
         self.preds = torch.softmax(torch.cat(self.preds, dim=0), dim=1)
         self.target = torch.cat(self.target, dim=0)
+        if self.preds.isnan().any():
+            return np.nan
         return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy(), eps=1e-16).item()
 
 
