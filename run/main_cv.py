@@ -10,7 +10,7 @@ from src.utils.utils import MyLightningCLI, TrainerWandb
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,
     format = '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s'
 )
 
@@ -46,16 +46,20 @@ def train(sweep_q, worker_q):
     )
 
     cv_args = ['--data.init_args.fold_index', f'{worker_data.fold_index}']
-    cli = MyLightningCLI(
-        trainer_class=TrainerWandb, 
-        save_config_kwargs={
-            'config_filename': 'config_pl.yaml',
-            'overwrite': True,
-        },
-        args=sys.argv[1:] + cv_args,
-        run=True,
-    )
-    score = cli.trainer.checkpoint_callback.state_dict()["best_model_score"]
+    score = float('-inf')
+    try:
+        cli = MyLightningCLI(
+            trainer_class=TrainerWandb, 
+            save_config_kwargs={
+                'config_filename': 'config_pl.yaml',
+                'overwrite': True,
+            },
+            args=sys.argv[1:] + cv_args,
+            run=True,
+        )
+        score = cli.trainer.checkpoint_callback.state_dict()["best_model_score"]
+    except Exception as e:
+        print(e)
 
     run.log(dict(score=score))
     wandb.join()
