@@ -8,7 +8,26 @@ trainer:
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
       init_args:
         logging_interval: step
-    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    
+    # Only for tracking best metrics
+    # val
+    - class_path: src.utils.utils.ModelCheckpointNoSave
+      init_args:
+        save_top_k: 1
+        monitor: val_ll
+        every_n_epochs: 1
+        mode: max
+        save_on_train_epoch_end: false
+        save_last: false
+    - class_path: src.utils.utils.ModelCheckpointNoSave
+      init_args:
+        save_top_k: 1
+        monitor: val_auc
+        every_n_epochs: 1
+        mode: max
+        save_on_train_epoch_end: false
+        save_last: false
+    - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
         save_top_k: 1
         monitor: val_f1
@@ -16,10 +35,46 @@ trainer:
         mode: max
         save_on_train_epoch_end: false
         save_last: false
-    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    # for actual saving
+    # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    - class_path: src.utils.utils.ModelCheckpointNoSave
+      init_args:
+        save_top_k: 1
+        monitor: val_pf1s
+        every_n_epochs: 1
+        mode: min
+        save_on_train_epoch_end: false
+        save_last: false
+    
+    # val downsampled
+    - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
         save_top_k: 1
         monitor: val_ds_ll
+        every_n_epochs: 1
+        mode: max
+        save_on_train_epoch_end: false
+        save_last: false
+    - class_path: src.utils.utils.ModelCheckpointNoSave
+      init_args:
+        save_top_k: 1
+        monitor: val_ds_auc
+        every_n_epochs: 1
+        mode: max
+        save_on_train_epoch_end: false
+        save_last: false
+    - class_path: src.utils.utils.ModelCheckpointNoSave
+      init_args:
+        save_top_k: 1
+        monitor: val_ds_f1
+        every_n_epochs: 1
+        mode: max
+        save_on_train_epoch_end: false
+        save_last: false
+    - class_path: src.utils.utils.ModelCheckpointNoSave
+      init_args:
+        save_top_k: 1
+        monitor: val_ds_pf1s
         every_n_epochs: 1
         mode: min
         save_on_train_epoch_end: false

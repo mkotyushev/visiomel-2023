@@ -13,6 +13,7 @@ import pickle
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torchvision.datasets.folder import default_loader
 from typing import Dict, Optional, Union, Any, Literal
 from model.patch_embed_with_backbone import SwinTransformerV2Modded
@@ -25,6 +26,7 @@ from tqdm import tqdm
 from sklearn.preprocessing import OneHotEncoder
 from matplotlib import pyplot as plt
 from torch import Tensor
+from weakref import proxy
 
 
 logger = logging.getLogger(__name__)
@@ -632,3 +634,13 @@ class PenalizedBinaryFBetaScore(BinaryFBetaScore):
         penalty = (p_penalty if p_diff_score < 0 else 0) + (n_penalty if n_diff_score < 0 else 0)
 
         return fbeta + penalty
+
+
+class ModelCheckpointNoSave(ModelCheckpoint):
+    def _save_checkpoint(self, trainer: Trainer, filepath: str) -> None:
+        self._last_global_step_saved = trainer.global_step
+
+        # notify loggers
+        if trainer.is_global_zero:
+            for logger in trainer.loggers:
+                logger.after_save_checkpoint(proxy(self))
