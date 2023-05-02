@@ -16,7 +16,7 @@ trainer:
         save_top_k: 1
         monitor: val_ll
         every_n_epochs: 1
-        mode: max
+        mode: min
         save_on_train_epoch_end: false
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
@@ -42,7 +42,7 @@ trainer:
         save_top_k: 1
         monitor: val_pf1s
         every_n_epochs: 1
-        mode: min
+        mode: max
         save_on_train_epoch_end: false
         save_last: false
     
@@ -52,7 +52,7 @@ trainer:
         save_top_k: 1
         monitor: val_ds_ll
         every_n_epochs: 1
-        mode: max
+        mode: min
         save_on_train_epoch_end: false
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
@@ -76,7 +76,7 @@ trainer:
         save_top_k: 1
         monitor: val_ds_pf1s
         every_n_epochs: 1
-        mode: min
+        mode: max
         save_on_train_epoch_end: false
         save_last: false
 
