@@ -10,7 +10,7 @@ command:
 method: bayes
 metric:
   goal: maximize
-  name: val_f1
+  name: mean_best_val_f1
 parameters:
   model.init_args.attention_hidden_dim:
     distribution: categorical

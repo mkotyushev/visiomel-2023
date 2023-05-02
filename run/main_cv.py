@@ -142,13 +142,13 @@ def main():
             scores[name][result.fold_index] = value
             sweep_run.log(
                 {
-                    name: value,
+                    f'best_{name}': value,
                     "fold_index": result.fold_index,
                 }
             )
 
     # Log mean of metrics
-    scores_mean = {name: sum(fold_index_to_score.values()) / len(fold_index_to_score) for name, fold_index_to_score in scores.items()}
+    scores_mean = {f'mean_best_{name}': sum(fold_index_to_score.values()) / len(fold_index_to_score) for name, fold_index_to_score in scores.items()}
 
     sweep_run.log(scores_mean)
     wandb.join()
