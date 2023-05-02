@@ -1,3 +1,4 @@
+program: run/main_cv.py
 command:
   - ${env}
   - /root/miniconda3/envs/visiomel-2023/bin/python
@@ -14,21 +15,20 @@ parameters:
   model.init_args.attention_hidden_dim:
     distribution: categorical
     values:
-      - 32
-      - 64
-      - 128
-      - 256
-  model.init_args.optimizer_init.init_args.lr:
+    - 32
+    - 64
+    - 128
+    - 256
+  optimizer.init_args.lr:
     distribution: log_uniform
     max: 0.1
     min: 0.0001
   model.init_args.label_smoothing:
     distribution: uniform
-      max: 0.3
-      min: 0.0
+    max: 0.3
+    min: 0.0
   data.init_args.sampler:
     distribution: categorical
     values:
-      - null
-      - weighted_upsampling
-program: run/main.py
+    - 'null'
+    - weighted_upsampling
