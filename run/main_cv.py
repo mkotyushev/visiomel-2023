@@ -52,7 +52,7 @@ def train(sweep_q, worker_q):
             'config_filename': 'config_pl.yaml',
             'overwrite': True,
         },
-        args=sys.args[1:] + cv_args,
+        args=sys.argv[1:] + cv_args,
         run=True,
     )
     score = cli.trainer.checkpoint_callback.state_dict()["best_model_score"]
@@ -70,6 +70,7 @@ def main():
             'config_filename': 'config_pl.yaml',
             'overwrite': True,
         },
+        args=[arg for arg in sys.argv[1:] if arg != 'fit'],
         run=False,
     )
 
@@ -77,7 +78,7 @@ def main():
     # Workers will be blocked on a queue waiting to start
     sweep_q = multiprocessing.Queue()
     workers = []
-    for fold_index in range(cli.config.data.init_args.n_folds):
+    for fold_index in range(cli.config.data.init_args.k):
         q = multiprocessing.Queue()
         p = multiprocessing.Process(
             target=train, kwargs=dict(sweep_q=sweep_q, worker_q=q)
@@ -96,7 +97,7 @@ def main():
 
     # Run CV
     scores = {}
-    for fold_index in range(cli.config.data.init_args.n_folds):
+    for fold_index in range(cli.config.data.init_args.k):
         worker = workers[fold_index]
         # start worker
         worker.queue.put(
