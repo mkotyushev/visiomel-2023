@@ -5,6 +5,7 @@ from pytorch_lightning import LightningModule
 from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
+import torch
 from torch.nn import ModuleDict, CrossEntropyLoss
 from pytorch_lightning.cli import instantiate_class
 from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryStatScores
@@ -94,6 +95,25 @@ class VisiomelModel(LightningModule):
                 prog_bar=True,
             )
         self.update_train_metrics(preds, batch)
+
+        # Handle nan in loss
+        has_nan = False
+        if torch.isnan(total_loss):
+            has_nan = True
+            logger.warning(
+                f'Loss is nan at epoch {self.current_epoch} '
+                f'step {self.global_step}.'
+            )
+        for loss_name, loss in losses.items():
+            if torch.isnan(loss):
+                has_nan = True
+                logger.warning(
+                    f'Loss {loss_name} is nan at epoch {self.current_epoch} '
+                    f'step {self.global_step}.'
+                )
+        if has_nan:
+            return None
+        
         return total_loss
     
     def validation_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None, **kwargs) -> Tensor:
