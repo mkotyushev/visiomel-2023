@@ -333,14 +333,17 @@ class VisiomelDatamodule(LightningDataModule):
                     SubsetDataset(val_subset, transform=self.val_transform, n_repeats=val_n_repeats)
                 self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
             else:
-                self.train_dataset = VisiomelImageFolder(
+                dataset = VisiomelImageFolder(
                     self.hparams.data_dir_train, 
                     shared_cache=self.shared_cache,
                     pre_transform=self.pre_transform,
-                    transform=self.train_transform, 
+                    transform=None, 
                     loader=loader_with_filepath,
-                    n_repeats=self.hparams.train_transform_n_repeats,
+                    n_repeats=1,
                 )
+                train_subset = Subset(dataset, np.arange(len(dataset)))
+                self.train_dataset = \
+                    SubsetDataset(train_subset, transform=self.train_transform, n_repeats=train_n_repeats)
                 self.val_dataset = None
 
             # Test dataset
