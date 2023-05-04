@@ -133,6 +133,10 @@ class VisiomelModel(LightningModule):
         self.update_val_metrics(preds, batch, dataloader_idx)
         return total_loss
 
+    def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None, **kwargs) -> Tensor:
+        _, _, preds = self.compute_loss_preds(batch, **kwargs)
+        return preds
+
     def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
         self.log(
             name,
