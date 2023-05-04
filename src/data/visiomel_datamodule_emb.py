@@ -161,8 +161,8 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 ) = split_fold(
                     dataset_no_repeats, 
                     dataset_with_repeats, 
-                    self.hparams.k_test, 
-                    self.hparams.fold_index_test, 
+                    self.hparams.k, 
+                    self.hparams.fold_index, 
                     self.hparams.split_seed
                 )
 
