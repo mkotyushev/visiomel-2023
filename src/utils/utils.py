@@ -644,3 +644,27 @@ class ModelCheckpointNoSave(ModelCheckpoint):
         if trainer.is_global_zero:
             for logger in trainer.loggers:
                 logger.after_save_checkpoint(proxy(self))
+
+
+def build_aggregation(features):
+    # features.shape == (1, N_patches, E)
+    if isinstance(features, torch.Tensor):
+        features = features.numpy()
+    features = features.squeeze().astype(np.float32)
+    return np.concatenate(
+        [
+            np.mean(features, axis=0),
+            np.std(features, axis=0),
+            np.max(features, axis=0),
+            np.min(features, axis=0),
+            np.quantile(features, 0.5, axis=0),
+        ],
+        axis=0,
+    )
+
+
+def get_X_y_groups(df):
+    X = np.array(df['features'].apply(build_aggregation).tolist())
+    y = np.array(df['label'].apply(np.array).tolist())
+    groups = df['path'].values
+    return X, y, groups
