@@ -225,3 +225,6 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             shuffle=False,
             collate_fn=self.collate_fn,
         )
+
+    def predict_dataloader(self) -> DataLoader:
+        return self.test_dataloader()
