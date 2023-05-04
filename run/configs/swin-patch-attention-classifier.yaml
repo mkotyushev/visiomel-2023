@@ -16,7 +16,7 @@ trainer:
         every_n_epochs: 1
         mode: max
         save_on_train_epoch_end: false
-        save_last: false
+        save_last: true
 
   # limit_train_batches: 10
   # limit_val_batches: 10
