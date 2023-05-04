@@ -342,8 +342,11 @@ class VisiomelDatamodule(LightningDataModule):
                     n_repeats=1,
                 )
                 train_subset = Subset(dataset, np.arange(len(dataset)))
-                self.train_dataset = \
-                    SubsetDataset(train_subset, transform=self.train_transform, n_repeats=train_n_repeats)
+                self.train_dataset = SubsetDataset(
+                    train_subset, 
+                    transform=self.train_transform, 
+                    n_repeats=self.hparams.train_transform_n_repeats
+                )
                 self.val_dataset = None
 
             # Test dataset
