@@ -185,7 +185,6 @@ data:
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_2/embeddings/val.pkl
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_3/embeddings/val.pkl
       - /workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_4/embeddings/val.pkl
-    use_no_repeats_for_val: true
     k: 5
     fold_index: 0
     split_seed: 0
