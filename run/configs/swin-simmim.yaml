@@ -19,6 +19,12 @@ trainer:
         every_n_epochs: 1
         mode: min
         save_on_train_epoch_end: false
+        save_last: false
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        save_top_k: 1
+        every_n_epochs: 1
+        save_on_train_epoch_end: true
         save_last: true
 model:
   class_path: src.model.swin_transformer_v2_simmim.SwinTransformerV2SimMIM
