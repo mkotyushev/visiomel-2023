@@ -1,42 +1,18 @@
 import logging
 import numpy as np
-import pandas as pd
 import torch
 from copy import deepcopy
 from typing import List, Optional, Tuple
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from pytorch_lightning import LightningDataModule
-from sklearn.model_selection import StratifiedGroupKFold, train_test_split
+from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data._utils.collate import default_collate
 
-from .visiomel_datamodule import SubsetDataset, build_downsampled_dataset, build_weighted_sampler
-from src.utils.utils import load_embeddings
-
+from .visiomel_datamodule import build_downsampled_dataset, build_weighted_sampler
+from .datasets import EmbeddingDataset
 
 logger = logging.getLogger(__name__)
 
-
-class EmbeddingDataset:
-    def __init__(self, pkl_pathes: List[str]) -> None:
-        self.data = pd.concat(load_embeddings(pkl_pathes).values())
-        self.data['features'] = self.data['features'].apply(lambda x: np.array(x).squeeze(0))
-        self.data['label'] = self.data['label'].apply(np.array)
-        self.data['group'] = self.data['path']
-
-    @property
-    def targets(self):
-        return self.data['label'].values
-    
-    @property
-    def groups(self):
-        return self.data['group'].values
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        row = self.data.iloc[index]
-        return row['features'], row['label'], row['path']
 
 
 def split_fold(

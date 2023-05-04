@@ -23,87 +23,11 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torch.utils.data._utils.collate import default_collate
 
 from src.data.transforms import Shrink, CenterCropPct, SimMIMTransform, PadCenterCrop
+from src.data.datasets import SubsetDataset, VisiomelImageFolder, EmbeddingDataset
 from src.utils.utils import loader_with_filepath
 
 
 logger = logging.getLogger(__name__)
-
-
-class SubsetDataset(Dataset):
-    def __init__(
-        self, 
-        subset, 
-        transform=None,
-        n_repeats=1,
-    ):
-        self.subset = subset
-        self.transform = transform
-        self.n_repeats = n_repeats
-        
-    def __getitem__(self, index):
-        sample = self.subset[index]
-
-        samples = []
-        for _ in range(self.n_repeats):
-            for sample in self.subset[index]:
-                if self.transform:
-                    x = (self.transform(sample[0]), *sample[1:])
-                else:
-                    x = sample
-                samples.append(x)
-            
-        return samples
-        
-    def __len__(self):
-        return len(self.subset)
-
-
-class VisiomelImageFolder(ImageFolder):
-    def __init__(
-        self, 
-        root: str, 
-        shared_cache=None, 
-        pre_transform=None, 
-        transform=None, 
-        target_transform=None, 
-        loader=None, 
-        is_valid_file=None,
-        n_repeats=1,
-    ):
-        super().__init__(root, transform, target_transform, loader, is_valid_file)
-        self.cache = shared_cache
-        self.pre_transform = pre_transform
-        self.n_repeats = n_repeats
-
-    def load_cached(self, path):
-        if self.cache is None or path not in self.cache:
-            sample = self.loader(path)
-            if self.pre_transform is not None:
-                sample = self.pre_transform(sample)
-            if self.cache is not None:
-                self.cache[path] = sample
-        else:
-            sample = self.cache[path]
-        return sample
-
-    def __getitem__(self, index: int):
-        path, target = self.samples[index]
-        sample = self.load_cached(path)
-
-        samples = []
-        for _ in range(self.n_repeats):
-            if self.transform is not None:
-                x = self.transform(sample)
-            else:
-                x = sample
-            if self.target_transform is not None:
-                y = self.target_transform(target)
-            else:
-                y = target
-
-            samples.append((x, y, path))
-
-        return samples
 
 
 def build_weighted_sampler(dataset):
@@ -117,7 +41,7 @@ def build_weighted_sampler(dataset):
             dataset.dataset.targets[index] 
             for index in dataset.indices
         ]
-    elif isinstance(dataset, ImageFolder):
+    elif isinstance(dataset, (ImageFolder, EmbeddingDataset)):
         targets = dataset.targets
     else:
         raise ValueError(f"Unsupported dataset type: {type(dataset)}")
