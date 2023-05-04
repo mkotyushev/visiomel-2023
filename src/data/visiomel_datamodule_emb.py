@@ -102,12 +102,12 @@ def masked_collate_fn(batch):
 
 
 def check_no_split_intersection(
-    train_subset: Subset, 
-    val_subset: Subset, 
+    train_dataset: EmbeddingDataset, 
+    val_dataset: EmbeddingDataset, 
     test_dataset: Optional[EmbeddingDataset] = None
 ):
-    train_filenames = set([train_subset.dataset.data.iloc[i]['path'] for i in train_subset.indices])
-    val_filenames = set([val_subset.dataset.data.iloc[i]['path'] for i in val_subset.indices])
+    train_filenames = set(train_dataset.data['path'].values)
+    val_filenames = set(val_dataset.data['path'].values)
     assert len(train_filenames & val_filenames) == 0, "train and val datasets intersect"
 
     if test_dataset is not None:
