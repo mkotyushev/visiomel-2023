@@ -1,12 +1,12 @@
 import logging
-import pickle
-from typing import List, Optional
 import numpy as np
 import pandas as pd
 import torch
+from copy import deepcopy
+from typing import List, Optional, Tuple
 from torch.utils.data import DataLoader, Subset
 from pytorch_lightning import LightningDataModule
-from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 from torch.utils.data._utils.collate import default_collate
 
 from .visiomel_datamodule import SubsetDataset, build_downsampled_dataset, build_weighted_sampler
@@ -37,7 +37,47 @@ class EmbeddingDataset:
     def __getitem__(self, index):
         row = self.data.iloc[index]
         return row['features'], row['label'], row['path']
+
+
+def split_test(
+    dataset_no_repeats: EmbeddingDataset, 
+    dataset_with_repeats: EmbeddingDataset,
+    test_size: float = 0.2,
+    random_state: int = 0,
+) -> Tuple[EmbeddingDataset, EmbeddingDataset, EmbeddingDataset, EmbeddingDataset]:
+    train_indices_no_repeats, test_indices_no_repeats = train_test_split(
+        dataset_no_repeats, 
+        test_size=test_size, 
+        random_state=random_state
+    )
     
+    # Get indices for embeddings with repeats by filenames (used for train)
+    train_filenames = dataset_no_repeats.data.iloc[train_indices_no_repeats]['path'].values
+    no_repeats_to_with_repeats_train_mask = dataset_with_repeats.data['path'].isin(train_filenames).values
+             
+    train_indices_with_repeats = np.arange(len(dataset_with_repeats))[
+        no_repeats_to_with_repeats_train_mask
+    ]
+    test_indices_with_repeats = np.arange(len(dataset_with_repeats))[
+        ~no_repeats_to_with_repeats_train_mask
+    ]
+
+    dataset_no_repeats_train = deepcopy(dataset_no_repeats)
+    dataset_no_repeats_train.data = dataset_no_repeats_train.data.iloc[train_indices_no_repeats]
+    dataset_no_repeats_test = deepcopy(dataset_no_repeats)
+    dataset_no_repeats_test.data = dataset_no_repeats_test.data.iloc[test_indices_no_repeats]
+
+    dataset_with_repeats_test = deepcopy(dataset_with_repeats)
+    dataset_with_repeats_test.data = dataset_with_repeats_test.data.iloc[test_indices_with_repeats]
+    dataset_with_repeats_train = deepcopy(dataset_with_repeats)
+    dataset_with_repeats_train.data = dataset_with_repeats_train.data.iloc[train_indices_with_repeats]
+
+    return \
+        dataset_no_repeats_train, \
+        dataset_no_repeats_test, \
+        dataset_with_repeats_train, \
+        dataset_with_repeats_test
+
 
 def masked_collate_fn(batch):
     # batch: list of [X: np.array, y: int, path: str] ->
@@ -58,10 +98,19 @@ def masked_collate_fn(batch):
     return X, mask, y, paths
 
 
-def check_no_split_intersection(train_subset: Subset, val_subset: Subset):
+def check_no_split_intersection(
+    train_subset: Subset, 
+    val_subset: Subset, 
+    test_dataset: Optional[EmbeddingDataset] = None
+):
     train_filenames = set([train_subset.dataset.data.iloc[i]['path'] for i in train_subset.indices])
     val_filenames = set([val_subset.dataset.data.iloc[i]['path'] for i in val_subset.indices])
     assert len(train_filenames & val_filenames) == 0, "train and val datasets intersect"
+
+    if test_dataset is not None:
+        test_filenames = set(test_dataset.data['path'].values)
+        assert len(train_filenames & test_filenames) == 0, "train and test datasets intersect"
+        assert len(val_filenames & test_filenames) == 0, "val and test datasets intersect"
 
 
 class VisiomelDatamoduleEmb(LightningDataModule):
@@ -72,6 +121,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         batch_size: int = 32,
         k: int = None,
         fold_index: int = 0,
+        test_size: Optional[float] = None,
         split_seed: int = 0,
         num_workers: int = 0,
         pin_memory: bool = False,
@@ -98,8 +148,23 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         """Setup data."""
         if self.train_dataset is None:
             if self.hparams.k is not None:
-                # Split by k-fold embeddings with no repeats (used for val)
                 dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
+                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
+
+                if self.hparams.test_size is not None:
+                    (
+                        dataset_no_repeats, 
+                        self.test_dataset, 
+                        dataset_with_repeats, 
+                        _
+                    ) = split_test(
+                        dataset_no_repeats, 
+                        dataset_with_repeats, 
+                        self.hparams.test_size, 
+                        self.hparams.split_seed
+                    )
+
+                # Split by k-fold embeddings with no repeats (used for val)
                 kfold = StratifiedGroupKFold(
                     n_splits=self.hparams.k, 
                     shuffle=True, 
@@ -108,8 +173,6 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 split = list(kfold.split(dataset_no_repeats, dataset_no_repeats.targets.astype(int), dataset_no_repeats.groups))
                 train_indices_no_repeats, val_indices_no_repeats = split[self.hparams.fold_index]
 
-                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
-                
                 # Get indices for embeddings with repeats by filenames (used for train)
                 train_filenames = dataset_no_repeats.data.iloc[train_indices_no_repeats]['path'].values
                 no_repeats_to_with_repeats_train_mask = dataset_with_repeats.data['path'].isin(train_filenames).values
@@ -133,7 +196,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
 
                 # Check that train and val datasets do not intersect
                 # in terms of filenames
-                check_no_split_intersection(train_subset, val_subset)
+                check_no_split_intersection(train_subset, val_subset, self.test_dataset)
                 
                 self.train_dataset, self.val_dataset = \
                     SubsetDataset(train_subset, transform=None, n_repeats=1), \
@@ -182,3 +245,15 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             collate_fn=self.collate_fn,
         )
         return [val_dataloader, val_dataloader_downsampled]
+
+    def test_dataloader(self) -> DataLoader:
+        return DataLoader(
+            dataset=self.test_dataset, 
+            batch_size=self.hparams.batch_size, 
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            prefetch_factor=self.hparams.prefetch_factor,
+            persistent_workers=self.hparams.persistent_workers,
+            shuffle=False,
+            collate_fn=self.collate_fn,
+        )
