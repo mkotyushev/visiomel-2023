@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import pandas as pd
 import pickle
 from pytorch_lightning.cli import LightningCLI
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, Callback
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torchvision.datasets.folder import default_loader
@@ -668,3 +668,36 @@ def get_X_y_groups(df):
     y = np.array(df['label'].apply(np.array).tolist())
     groups = df['path'].values
     return X, y, groups
+
+
+class SavePredictionsCallback(Callback):
+    def __init__(self, save_path):
+        self.save_path = save_path
+        self.predictions = []
+        self.filenames = []
+    
+    def on_predict_batch_end(
+        self, 
+        trainer,
+        pl_module,
+        outputs: Any,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ):
+        self.filenames.extend([path.split('/')[-1] for path in batch[3]])
+        self.predictions.append(outputs)
+
+    def on_predict_epoch_end(
+        self,
+        trainer,
+        pl_module,
+    ):
+        self.predictions = torch.softmax(torch.cat(self.predictions, dim=0), dim=1).cpu().numpy()[:, 1]
+        df = pd.DataFrame(
+            {
+                'filename': self.filenames,
+                'relapse': self.predictions,
+            }
+        )
+        df.to_csv(self.save_path, index=False)
