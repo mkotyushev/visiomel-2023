@@ -13,7 +13,10 @@ def get_runs_info(checkpoints_dir: Path, wandb_logs_dir: Path):
     wandb_logs_subdirs = [
         d for d in 
         wandb_logs_dir.iterdir()
-        if d.is_dir() and d.name.startswith('run-')
+        if d.is_dir() and (
+            d.name.startswith('run-') or
+            d.name.startswith('offline-run-')
+        )
     ]
 
     run_info = {}
