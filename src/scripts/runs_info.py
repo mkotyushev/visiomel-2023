@@ -21,7 +21,7 @@ def get_runs_info(checkpoints_dir: Path, wandb_logs_dir: Path):
         if not checkpoint_dir.is_dir():
             continue
         name = checkpoint_dir.name
-        for wandb_dir in wandb_logs_dir.iterdir():
+        for wandb_dir in wandb_logs_subdirs:
             if name not in wandb_dir.name:
                 continue
             config_path = wandb_dir / 'files' / 'config_pl.yaml'
