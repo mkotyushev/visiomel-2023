@@ -5,7 +5,7 @@ import torch
 from collections import Counter, defaultdict
 from copy import deepcopy
 from multiprocessing import Manager
-from typing import Optional
+from typing import Optional, Union
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 from pytorch_lightning import LightningDataModule
 from torchvision.datasets import ImageFolder
@@ -133,7 +133,14 @@ def build_weighted_sampler(dataset):
     return WeightedRandomSampler(weights=weights, num_samples=num_samples, replacement=True)
 
 
-def build_downsampled_dataset(subset_dataset: SubsetDataset):
+def build_downsampled_dataset(dataset: Union[SubsetDataset, Dataset]):
+    # Wrap dataset into SubsetDataset if needed
+    if isinstance(dataset, SubsetDataset):
+        subset_dataset = dataset
+    else:
+        subset = Subset(dataset, indices=range(len(dataset)))
+        subset_dataset = SubsetDataset(subset, transform=None, n_repeats=1)
+
     # Here we need to copy the dataset to avoid changing 
     # the original one while preserving underlying VisiomelImageFolder
     # dataset to keep shared cache.

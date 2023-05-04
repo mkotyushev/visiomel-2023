@@ -39,18 +39,21 @@ class EmbeddingDataset:
         return row['features'], row['label'], row['path']
 
 
-def split_test(
+def split_fold(
     dataset_no_repeats: EmbeddingDataset, 
     dataset_with_repeats: EmbeddingDataset,
-    test_size: float = 0.2,
+    k: int = 5,
+    fold_index: int = 0,
     random_state: int = 0,
 ) -> Tuple[EmbeddingDataset, EmbeddingDataset, EmbeddingDataset, EmbeddingDataset]:
-    train_indices_no_repeats, test_indices_no_repeats = train_test_split(
-        dataset_no_repeats, 
-        test_size=test_size, 
+    kfold = StratifiedGroupKFold(
+        n_splits=k, 
+        shuffle=True, 
         random_state=random_state
     )
-    
+    split = list(kfold.split(dataset_no_repeats, dataset_no_repeats.targets.astype(int), dataset_no_repeats.groups))
+    train_indices_no_repeats, test_indices_no_repeats = split[fold_index]
+
     # Get indices for embeddings with repeats by filenames (used for train)
     train_filenames = dataset_no_repeats.data.iloc[train_indices_no_repeats]['path'].values
     no_repeats_to_with_repeats_train_mask = dataset_with_repeats.data['path'].isin(train_filenames).values
@@ -121,7 +124,8 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         batch_size: int = 32,
         k: int = None,
         fold_index: int = 0,
-        test_size: Optional[float] = None,
+        k_test: Optional[int] = None,
+        fold_index_test: int = 0,
         split_seed: int = 0,
         num_workers: int = 0,
         pin_memory: bool = False,
@@ -129,7 +133,6 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
         num_workers_saturated: int = 0,
-        use_no_repeats_for_val: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -151,56 +154,45 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
                 dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
 
-                if self.hparams.test_size is not None:
+                # Test and val should be without repeats
+                # train should be with repeats
+
+                # split_fold returns:
+                #     dataset_no_repeats_train, \
+                #     dataset_no_repeats_test, \
+                #     dataset_with_repeats_train, \
+                #     dataset_with_repeats_test
+
+                if self.hparams.k_test is not None:
                     (
                         dataset_no_repeats, 
                         self.test_dataset, 
                         dataset_with_repeats, 
                         _
-                    ) = split_test(
+                    ) = split_fold(
                         dataset_no_repeats, 
                         dataset_with_repeats, 
-                        self.hparams.test_size, 
+                        self.hparams.k_test, 
+                        self.hparams.fold_index_test, 
                         self.hparams.split_seed
                     )
-
-                # Split by k-fold embeddings with no repeats (used for val)
-                kfold = StratifiedGroupKFold(
-                    n_splits=self.hparams.k, 
-                    shuffle=True, 
-                    random_state=self.hparams.split_seed
-                )
-                split = list(kfold.split(dataset_no_repeats, dataset_no_repeats.targets.astype(int), dataset_no_repeats.groups))
-                train_indices_no_repeats, val_indices_no_repeats = split[self.hparams.fold_index]
-
-                # Get indices for embeddings with repeats by filenames (used for train)
-                train_filenames = dataset_no_repeats.data.iloc[train_indices_no_repeats]['path'].values
-                no_repeats_to_with_repeats_train_mask = dataset_with_repeats.data['path'].isin(train_filenames).values
                 
-                train_indices_with_repeats = np.arange(len(dataset_with_repeats))[
-                    no_repeats_to_with_repeats_train_mask
-                ]
-                val_indices_with_repeats = np.arange(len(dataset_with_repeats))[
-                    ~no_repeats_to_with_repeats_train_mask
-                ]
-
-                # Use dataset with repeats train split for train 
-                train_subset = Subset(dataset_with_repeats, train_indices_with_repeats)
-
-                # Do not actually use dataset without repeats val split for val
-                # if required
-                if self.hparams.use_no_repeats_for_val:
-                    val_subset = Subset(dataset_no_repeats, val_indices_no_repeats)
-                else:
-                    val_subset = Subset(dataset_with_repeats, val_indices_with_repeats)
+                (
+                    _, 
+                    self.val_dataset, 
+                    self.train_dataset, 
+                    _
+                ) = split_fold(
+                    dataset_no_repeats, 
+                    dataset_with_repeats, 
+                    self.hparams.k_test, 
+                    self.hparams.fold_index_test, 
+                    self.hparams.split_seed
+                )
 
                 # Check that train and val datasets do not intersect
                 # in terms of filenames
-                check_no_split_intersection(train_subset, val_subset, self.test_dataset)
-                
-                self.train_dataset, self.val_dataset = \
-                    SubsetDataset(train_subset, transform=None, n_repeats=1), \
-                    SubsetDataset(val_subset, transform=None, n_repeats=1)
+                check_no_split_intersection(self.train_dataset, self.val_dataset, self.test_dataset)
                 self.val_dataset_downsampled = build_downsampled_dataset(self.val_dataset)
             else:
                 self.train_dataset = EmbeddingDataset(self.hparams.embedding_pathes)
