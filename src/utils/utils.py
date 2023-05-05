@@ -559,15 +559,16 @@ def check_unique_pathes_same(df1, df2):
     assert pathes1 == pathes2
 
 
-def load_embeddings(pathes):
+def load_embeddings(pathes, deduplicate=True):
     dfs = dict()
     for path in pathes:
         logging.info(f'path: {path}')
         with open(path, 'rb') as f:
             df = pickle.load(f)
         logging.info(f'\traw shape: {df.shape}')
-        df = deduplicate_repeated_augs(df)
-        logging.info(f'\tdeduplicated shape: {df.shape}')
+        if deduplicate:
+            df = deduplicate_repeated_augs(df)
+            logging.info(f'\tdeduplicated shape: {df.shape}')
         dfs[path] = df
 
     # TODO: check_no_pairwise_intersection does not work 
