@@ -11,7 +11,7 @@ from data.visiomel_datamodule import VisiomelDatamodule
 
 # fold_index = 0
 parser = argparse.ArgumentParser()
-parser.add_argument('--fold_index', type=int, default=0)
+parser.add_argument('--fold-index', type=int, default=0)
 parser.add_argument('--aug', action='store_true')
 args = parser.parse_args()
 
