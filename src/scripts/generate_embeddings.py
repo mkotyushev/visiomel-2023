@@ -13,6 +13,7 @@ from data.visiomel_datamodule import VisiomelDatamodule
 parser = argparse.ArgumentParser()
 parser.add_argument('--fold-index', type=int, default=0)
 parser.add_argument('--aug', action='store_true')
+parser.add_argument('--patch-batch-size', type=int, default=2)
 args = parser.parse_args()
 
 fold_index = args.fold_index
@@ -31,7 +32,7 @@ else:  # for val embeddings w/o augmentations with 1 repeat
 patch_embed_backbone_name = 'swinv2_base_window12to24_192to384_22kft1k'
 patch_size = 1536
 patch_embed_backbone_ckpt_path = f'/workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_{fold_index}/checkpoints/best.ckpt'
-patch_batch_size = 2
+patch_batch_size = args.patch_batch_size
 batch_size = 1
 save_path = f'/workspace/visiomel-2023/weights/val_ssup_patches_aug_fold_{fold_index}/embeddings/'
 
