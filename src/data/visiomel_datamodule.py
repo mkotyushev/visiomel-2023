@@ -255,7 +255,7 @@ class VisiomelDatamodule(LightningDataModule):
             simmim_transform = SimMIMTransform(mask_generator)
         elif self.hparams.task == 'simmim_randaug':
             train_random_transform = rand_augment_transform(
-                config_str='rand-m9-mstd0.5',
+                config_str='rand-m9-n3-mstd0.5',
                 hparams=dict(img_mean=img_mean)
             )
             mask_generator = MaskGenerator(
