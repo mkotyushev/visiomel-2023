@@ -23,36 +23,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
-parser.add_argument('--logs_dir', type=Path, default='./wandb')
-parser.add_argument('--nested', action='store_true')
-parser.add_argument('--save_path', type=Path, default='./cv_results.pkl')
-
-args = parser.parse_args()
-
-# Get oldest checkpoint for each nested fold
-runs_info = get_runs_info(args.checkpoint_root_dir, args.logs_dir)
-fold_to_ckpt_info = defaultdict(dict)
-for run_info in runs_info.values():
-    fold_to_ckpt_info[run_info['fold_index_test']][run_info['fold_index']] = {
-        'ckpt_path': oldest_checkpoint(
-            run_info['checkpoint_paths']
-        ),
-        'config_path': run_info['config_path'],
-    }
-
-if args.nested:
-    assert len(fold_to_ckpt_info) == 5, 'Found less than 5 outer folds'
-assert all(len(fold_info) == 5 for fold_info in fold_to_ckpt_info.values()), 'Found less than 5 inner folds'
-
-logging.info(f'Found {len(fold_to_ckpt_info)} nested folds')
-for fold_index_test, fold_info in fold_to_ckpt_info.items():
-    logging.info(
-        f'Found {len(fold_info)} folds for nested fold {fold_index_test}, '
-        f'missing folds: {set(range(5)) - set(fold_info.keys())}'
-    )
-
 
 def bootstrap_metrics(y_true: np.array, y_proba: np.array, n_bootstrap=1000, replace=True):
     neg_class_indices = np.arange(y_true.shape[0])[y_true == 0]
@@ -87,12 +57,26 @@ def bootstrap_metrics(y_true: np.array, y_proba: np.array, n_bootstrap=1000, rep
     return {metric_name: np.mean(metric_values) for metric_name, metric_values in metrics.items()}
 
 
+def print_results(cv_results):
+    print('========================================')
+    for fold_index_test, fold_results in cv_results.items():
+        print(f'Fold {fold_index_test}')
+        for metric_name, metric_value in fold_results.items():
+            if metric_name == 'data':
+                continue
+            print(f'\t{metric_name}: {metric_value}')
+        print()
+
+    print('========================================')
+    for metric_name in cv_results[0].keys():
+        if metric_name == 'data':
+            continue
+        print(f'{metric_name}: {np.mean([fold_results[metric_name] for fold_results in cv_results.values()])}')
+
+
 # Workaround to avoid error: 'Configuration check failed :: 
 # No action for destination key "ckpt_path" to check its value.'
 # whenn run=False and PL-generated config file is used
-sys.argv = sys.argv[:1]
-
-
 class MyLightningCLINoRun(MyLightningCLI):
     @staticmethod
     def subcommands() -> Dict[str, Set[str]]:
@@ -112,57 +96,71 @@ class TrainerWandbNoRun(TrainerWandb):
         pass
 
 
-n_bootstrap = 1000
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
+    parser.add_argument('--logs_dir', type=Path, default='./wandb')
+    parser.add_argument('--nested', action='store_true')
+    parser.add_argument('--save_path', type=Path, default='./cv_results.pkl')
 
-if args.nested:
-    fold_indices_test = range(5)
-else:
-    fold_indices_test = [None]
+    args = parser.parse_args()
 
-cv_results = defaultdict(dict)
-for fold_index_test in tqdm(fold_indices_test):
-    # PAC model
-    data = defaultdict(dict)
-    for fold_index in tqdm(range(5)):
-        cli = MyLightningCLINoRun(
-            trainer_class=TrainerWandbNoRun, 
-            save_config_kwargs={
-                'config_filename': 'config_pl.yaml',
-                'overwrite': True,
-            },
-            args=[
-                'no_run',
-                '--config', str(fold_to_ckpt_info[fold_index_test][fold_index]['config_path']),
-            ],
-            run=True,
+    # Get oldest checkpoint for each nested fold
+    runs_info = get_runs_info(args.checkpoint_root_dir, args.logs_dir)
+    fold_to_ckpt_info = defaultdict(dict)
+    for run_info in runs_info.values():
+        fold_to_ckpt_info[run_info['fold_index_test']][run_info['fold_index']] = {
+            'ckpt_path': oldest_checkpoint(
+                run_info['checkpoint_paths']
+            ),
+            'config_path': run_info['config_path'],
+        }
+
+    if args.nested:
+        assert len(fold_to_ckpt_info) == 5, 'Found less than 5 outer folds'
+    assert all(len(fold_info) == 5 for fold_info in fold_to_ckpt_info.values()), 'Found less than 5 inner folds'
+
+    logging.info(f'Found {len(fold_to_ckpt_info)} nested folds')
+    for fold_index_test, fold_info in fold_to_ckpt_info.items():
+        logging.info(
+            f'Found {len(fold_info)} folds for nested fold {fold_index_test}, '
+            f'missing folds: {set(range(5)) - set(fold_info.keys())}'
         )
 
-        data['pac'][fold_index] = {}
-        # Predict on val
-        cli.datamodule.setup()
-        y_proba = torch.softmax(
-            torch.concat(
-                cli.trainer.predict(
-                    model=cli.model,
-                    dataloaders=cli.datamodule.val_dataloader()[0],  # only not downsampled
-                    return_predictions=True,
-                    ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
-                ), 
-                dim=0
-            ).float(), 
-            dim=1
-        ).numpy()
-        _, y_val, _ = get_X_y_groups(cli.datamodule.val_dataset.data)
-        data['pac'][fold_index]['y_proba_val'] = y_proba[:, 1]
-        data['pac'][fold_index]['gt_val'] = y_val
 
-        # Predict on test
-        if args.nested:
+    n_bootstrap = 1000
+
+    if args.nested:
+        fold_indices_test = range(5)
+    else:
+        fold_indices_test = [None]
+
+    cv_results = defaultdict(dict)
+    for fold_index_test in tqdm(fold_indices_test):
+        # PAC model
+        data = defaultdict(dict)
+        for fold_index in tqdm(range(5)):
+            cli = MyLightningCLINoRun(
+                trainer_class=TrainerWandbNoRun, 
+                save_config_kwargs={
+                    'config_filename': 'config_pl.yaml',
+                    'overwrite': True,
+                },
+                args=[
+                    'no_run',
+                    '--config', str(fold_to_ckpt_info[fold_index_test][fold_index]['config_path']),
+                ],
+                run=True,
+            )
+
+            data['pac'][fold_index] = {}
+            # Predict on val
+            cli.datamodule.setup()
             y_proba = torch.softmax(
                 torch.concat(
                     cli.trainer.predict(
                         model=cli.model,
-                        datamodule=cli.datamodule, 
+                        dataloaders=cli.datamodule.val_dataloader()[0],  # only not downsampled
                         return_predictions=True,
                         ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
                     ), 
@@ -170,77 +168,86 @@ for fold_index_test in tqdm(fold_indices_test):
                 ).float(), 
                 dim=1
             ).numpy()
-            _, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
-            data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
-            data['pac'][fold_index]['gt_test'] = y_test
+            _, y_val, _ = get_X_y_groups(cli.datamodule.val_dataset.data)
+            data['pac'][fold_index]['y_proba_val'] = y_proba[:, 1]
+            data['pac'][fold_index]['gt_val'] = y_val
 
-    if args.nested:
-        # Mean test predictions over folds
-        data['pac']['mean'] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
+            # Predict on test
+            if args.nested:
+                y_proba = torch.softmax(
+                    torch.concat(
+                        cli.trainer.predict(
+                            model=cli.model,
+                            datamodule=cli.datamodule, 
+                            return_predictions=True,
+                            ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
+                        ), 
+                        dim=0
+                    ).float(), 
+                    dim=1
+                ).numpy()
+                _, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
+                data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
+                data['pac'][fold_index]['gt_test'] = y_test
 
-        # GT: same for all folds
-        assert np.all([np.all(data['pac'][i]['gt_test'] == data['pac'][0]['gt_test']) for i in range(5)])
-        data['gt'] = data['pac'][0]['gt_test']
+        if args.nested:
+            # Mean test predictions over folds
+            data['pac']['mean'] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
 
-    # Metrics
-    # Log loss
-    cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'], data['pac']['mean'], eps=1e-16)
+            # GT: same for all folds
+            assert np.all([np.all(data['pac'][i]['gt_test'] == data['pac'][0]['gt_test']) for i in range(5)])
+            data['gt'] = data['pac'][0]['gt_test']
 
-    # F1 score
-    cv_results[fold_index_test]['f1_score'] = f1_score(
-        data['gt'],
-        data['pac']['mean'] > 0.5,
-    )
+        # Metrics
+        # Log loss
+        cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'], data['pac']['mean'], eps=1e-16)
 
-    # ROC AUC
-    cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
-        data['gt'],
-        data['pac']['mean'],
-    )
+        # F1 score
+        cv_results[fold_index_test]['f1_score'] = f1_score(
+            data['gt'],
+            data['pac']['mean'] > 0.5,
+        )
 
-    # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
-    bootstrap_metrics_dict = bootstrap_metrics(
-        data['gt'], 
-        data['pac']['mean'],
-        n_bootstrap=n_bootstrap,
-        replace=True,
-    )
-    for metric_name, metric_value in bootstrap_metrics_dict.items():
-        cv_results[fold_index_test][metric_name] = metric_value
+        # ROC AUC
+        cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
+            data['gt'],
+            data['pac']['mean'],
+        )
 
-    # Val metrics
-    cv_results[fold_index_test]['log_loss_val'] = sum(
-        log_loss(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'], eps=1e-16)
-        for i in range(5)
-    ) / 5
-    cv_results[fold_index_test]['f1_score_val'] = sum(
-        f1_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'] > 0.5)
-        for i in range(5)
-    ) / 5
-    cv_results[fold_index_test]['roc_auc_val'] = sum(
-        roc_auc_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'])
-        for i in range(5)
-    ) / 5
+        # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
+        bootstrap_metrics_dict = bootstrap_metrics(
+            data['gt'], 
+            data['pac']['mean'],
+            n_bootstrap=n_bootstrap,
+            replace=True,
+        )
+        for metric_name, metric_value in bootstrap_metrics_dict.items():
+            cv_results[fold_index_test][metric_name] = metric_value
 
-    # Raw data
-    cv_results[fold_index_test]['data'] = data
+        # Val metrics
+        cv_results[fold_index_test]['log_loss_val'] = sum(
+            log_loss(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'], eps=1e-16)
+            for i in range(5)
+        ) / 5
+        cv_results[fold_index_test]['f1_score_val'] = sum(
+            f1_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'] > 0.5)
+            for i in range(5)
+        ) / 5
+        cv_results[fold_index_test]['roc_auc_val'] = sum(
+            roc_auc_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'])
+            for i in range(5)
+        ) / 5
 
-# Print results
-print('========================================')
-for fold_index_test, fold_results in cv_results.items():
-    print(f'Fold {fold_index_test}')
-    for metric_name, metric_value in fold_results.items():
-        if metric_name == 'data':
-            continue
-        print(f'\t{metric_name}: {metric_value}')
-    print()
+        # Raw data
+        cv_results[fold_index_test]['data'] = data
 
-print('========================================')
-for metric_name in cv_results[0].keys():
-    if metric_name == 'data':
-        continue
-    print(f'{metric_name}: {np.mean([fold_results[metric_name] for fold_results in cv_results.values()])}')
+    # Print results
+    print_results(cv_results)
 
-# Save results to file in pickle format
-with open(args.save_path, 'wb') as f:
-    pickle.dump(cv_results, f)
+    # Save results to file in pickle format
+    with open(args.save_path, 'wb') as f:
+        pickle.dump(cv_results, f)
+
+
+if __name__ == '__main__':
+    main()
