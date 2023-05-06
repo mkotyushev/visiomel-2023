@@ -105,6 +105,9 @@ def main():
 
     args = parser.parse_args()
 
+    # Remove sys.argv
+    sys.argv = sys.argv[:1]
+
     # Get oldest checkpoint for each nested fold
     runs_info = get_runs_info(args.checkpoint_root_dir, args.logs_dir)
     fold_to_ckpt_info = defaultdict(dict)
