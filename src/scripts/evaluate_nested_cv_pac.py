@@ -133,7 +133,7 @@ def main():
     if args.nested:
         fold_indices_test = range(5)
     else:
-        fold_indices_test = [None]
+        fold_indices_test = [0]
 
     cv_results = defaultdict(dict)
     for fold_index_test in tqdm(fold_indices_test):
@@ -198,31 +198,32 @@ def main():
             assert np.all([np.all(data['pac'][i]['gt_test'] == data['pac'][0]['gt_test']) for i in range(5)])
             data['gt'] = data['pac'][0]['gt_test']
 
-        # Metrics
-        # Log loss
-        cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'], data['pac']['mean'], eps=1e-16)
+        if args.nested:
+            # Metrics
+            # Log loss
+            cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'], data['pac']['mean'], eps=1e-16)
 
-        # F1 score
-        cv_results[fold_index_test]['f1_score'] = f1_score(
-            data['gt'],
-            data['pac']['mean'] > 0.5,
-        )
+            # F1 score
+            cv_results[fold_index_test]['f1_score'] = f1_score(
+                data['gt'],
+                data['pac']['mean'] > 0.5,
+            )
 
-        # ROC AUC
-        cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
-            data['gt'],
-            data['pac']['mean'],
-        )
+            # ROC AUC
+            cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
+                data['gt'],
+                data['pac']['mean'],
+            )
 
-        # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
-        bootstrap_metrics_dict = bootstrap_metrics(
-            data['gt'], 
-            data['pac']['mean'],
-            n_bootstrap=n_bootstrap,
-            replace=True,
-        )
-        for metric_name, metric_value in bootstrap_metrics_dict.items():
-            cv_results[fold_index_test][metric_name] = metric_value
+            # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
+            bootstrap_metrics_dict = bootstrap_metrics(
+                data['gt'], 
+                data['pac']['mean'],
+                n_bootstrap=n_bootstrap,
+                replace=True,
+            )
+            for metric_name, metric_value in bootstrap_metrics_dict.items():
+                cv_results[fold_index_test][metric_name] = metric_value
 
         # Val metrics
         cv_results[fold_index_test]['log_loss_val'] = sum(
@@ -237,6 +238,20 @@ def main():
             roc_auc_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'])
             for i in range(5)
         ) / 5
+
+        # Bootstrap metrics on n_bootstrap val sets with downsampled negative class
+        bootstrap_metrics_dict_outer = defaultdict(list)
+        for i in range(5):
+            bootstrap_metrics_dict = bootstrap_metrics(
+                data['pac'][i]['gt_val'], 
+                data['pac'][i]['y_proba_val'],
+                n_bootstrap=n_bootstrap,
+                replace=True,
+            )
+            for metric_name, metric_value in bootstrap_metrics_dict.items():
+                bootstrap_metrics_dict_outer[metric_name].append(metric_value)
+        for metric_name, metric_value in bootstrap_metrics_dict_outer.items():
+            cv_results[fold_index_test][metric_name + '_val'] = sum(bootstrap_metrics_dict_outer[metric_name]) / 5
 
         # Raw data
         cv_results[fold_index_test]['data'] = data
