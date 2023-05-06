@@ -6,6 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 import sys
 from typing import Any, Dict, Optional, Set, Union
+import pickle
 
 import numpy as np
 from pytorch_lightning import LightningDataModule, LightningModule
@@ -24,6 +25,7 @@ logging.basicConfig(level=logging.INFO)
 parser = argparse.ArgumentParser()
 parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
 parser.add_argument('--logs_dir', type=Path, default='./wandb')
+parser.add_argument('--save_path', type=Path, default='./cv_results.pkl')
 
 args = parser.parse_args()
 
@@ -198,6 +200,9 @@ for fold_index_test in tqdm(range(5)):
     for metric_name in data['pac'][0]['val_metrics']:
         cv_results[fold_index_test][metric_name + '_val'] = sum(data['pac'][i]['val_metrics'][metric_name] for i in range(5)) / 5
 
+    # Raw data
+    cv_results[fold_index_test]['data'] = data
+
 # Print results
 print('========================================')
 for fold_index_test, fold_results in cv_results.items():
@@ -209,3 +214,7 @@ for fold_index_test, fold_results in cv_results.items():
 print('========================================')
 for metric_name in cv_results[0].keys():
     print(f'{metric_name}: {np.mean([fold_results[metric_name] for fold_results in cv_results.values()])}')
+
+# Save results to file in pickle format
+with open(args.save_path, 'wb') as f:
+    pickle.dump(cv_results, f)
