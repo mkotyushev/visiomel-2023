@@ -1,5 +1,6 @@
 # 1. get checkpoint root dir: args.checkpoint_root_dir
 # 2. get config path: args.config_path
+# usage: python evaluate_nested_cv_pac.py --checkpoint_root_dir ./visiomel --logs_dir ./wandb --nested --save_path ./cv_results.pkl
 
 import argparse
 from collections import defaultdict
@@ -25,6 +26,7 @@ logging.basicConfig(level=logging.INFO)
 parser = argparse.ArgumentParser()
 parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
 parser.add_argument('--logs_dir', type=Path, default='./wandb')
+parser.add_argument('--nested', action='store_true')
 parser.add_argument('--save_path', type=Path, default='./cv_results.pkl')
 
 args = parser.parse_args()
@@ -39,6 +41,10 @@ for run_info in runs_info.values():
         ),
         'config_path': run_info['config_path'],
     }
+
+if args.nested:
+    assert len(fold_to_ckpt_info) == 5, 'Found less than 5 outer folds'
+assert all(len(fold_info) == 5 for fold_info in fold_to_ckpt_info.values()), 'Found less than 5 inner folds'
 
 logging.info(f'Found {len(fold_to_ckpt_info)} nested folds')
 for fold_index_test, fold_info in fold_to_ckpt_info.items():
@@ -108,8 +114,13 @@ class TrainerWandbNoRun(TrainerWandb):
 
 n_bootstrap = 1000
 
+if args.nested:
+    fold_indices_test = range(5)
+else:
+    fold_indices_test = [None]
+
 cv_results = defaultdict(dict)
-for fold_index_test in tqdm(range(5)):
+for fold_index_test in tqdm(fold_indices_test):
     # PAC model
     data = defaultdict(dict)
     for fold_index in tqdm(range(5)):
@@ -142,33 +153,34 @@ for fold_index_test in tqdm(range(5)):
             dim=1
         ).numpy()
         _, y_val, _ = get_X_y_groups(cli.datamodule.val_dataset.data)
-        data['pac'][fold_index]['val_metrics'] = {
-            'log_loss': log_loss(y_val, y_proba[:, 1], eps=1e-16),
-            'f1_score': f1_score(y_val, y_proba[:, 1] > 0.5),
-            'roc_auc': roc_auc_score(y_val, y_proba[:, 1]),
-        }
+        data['pac'][fold_index]['y_proba_val'] = y_proba[:, 1]
+        data['pac'][fold_index]['gt_val'] = y_val
 
         # Predict on test
-        y_proba = torch.softmax(
-            torch.concat(
-                cli.trainer.predict(
-                    model=cli.model,
-                    datamodule=cli.datamodule, 
-                    return_predictions=True,
-                    ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
-                ), 
-                dim=0
-            ).float(), 
-            dim=1
-        ).numpy()
-        data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
+        if args.nested:
+            y_proba = torch.softmax(
+                torch.concat(
+                    cli.trainer.predict(
+                        model=cli.model,
+                        datamodule=cli.datamodule, 
+                        return_predictions=True,
+                        ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
+                    ), 
+                    dim=0
+                ).float(), 
+                dim=1
+            ).numpy()
+            _, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
+            data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
+            data['pac'][fold_index]['gt_test'] = y_test
 
-    # Mean test predictions over folds
-    data['pac']['mean'] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
+    if args.nested:
+        # Mean test predictions over folds
+        data['pac']['mean'] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
 
-    # GT
-    X_test, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
-    data['gt'] = y_test
+        # GT: same for all folds
+        assert np.all([np.all(data['pac'][i]['gt_test'] == data['pac'][0]['gt_test']) for i in range(5)])
+        data['gt'] = data['pac'][0]['gt_test']
 
     # Metrics
     # Log loss
@@ -197,8 +209,18 @@ for fold_index_test in tqdm(range(5)):
         cv_results[fold_index_test][metric_name] = metric_value
 
     # Val metrics
-    for metric_name in data['pac'][0]['val_metrics']:
-        cv_results[fold_index_test][metric_name + '_val'] = sum(data['pac'][i]['val_metrics'][metric_name] for i in range(5)) / 5
+    cv_results[fold_index_test]['log_loss_val'] = sum(
+        log_loss(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'], eps=1e-16)
+        for i in range(5)
+    ) / 5
+    cv_results[fold_index_test]['f1_score_val'] = sum(
+        f1_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'] > 0.5)
+        for i in range(5)
+    ) / 5
+    cv_results[fold_index_test]['roc_auc_val'] = sum(
+        roc_auc_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'])
+        for i in range(5)
+    ) / 5
 
     # Raw data
     cv_results[fold_index_test]['data'] = data
