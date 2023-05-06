@@ -96,6 +96,37 @@ class TrainerWandbNoRun(TrainerWandb):
         pass
 
 
+def calculate_metrics(y_true, y_proba, n_bootstrap=1000):
+    metrics = {}
+
+    # Log loss
+    metrics['log_loss'] = log_loss(y_true, y_proba, eps=1e-16)
+
+    # F1 score
+    metrics['f1_score'] = f1_score(
+        y_true,
+        y_proba > 0.5,
+    )
+
+    # ROC AUC
+    metrics['roc_auc'] = roc_auc_score(
+        y_true,
+        y_proba,
+    )
+
+    # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
+    bootstrap_metrics_dict = bootstrap_metrics(
+        y_true, 
+        y_proba,
+        n_bootstrap=n_bootstrap,
+        replace=True,
+    )
+    for metric_name, metric_value in bootstrap_metrics_dict.items():
+        metrics[metric_name] = metric_value
+    
+    return metrics
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
@@ -202,59 +233,27 @@ def main():
             data['gt'] = data['pac'][0]['gt_test']
 
         if args.nested:
-            # Metrics
-            # Log loss
-            cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'], data['pac']['mean'], eps=1e-16)
-
-            # F1 score
-            cv_results[fold_index_test]['f1_score'] = f1_score(
-                data['gt'],
-                data['pac']['mean'] > 0.5,
+            # Test metrics
+            cv_results[fold_index_test].update(
+                calculate_metrics(
+                    data['gt'], 
+                    data['pac']['mean'], 
+                    n_bootstrap=n_bootstrap
+                )
             )
-
-            # ROC AUC
-            cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
-                data['gt'],
-                data['pac']['mean'],
-            )
-
-            # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
-            bootstrap_metrics_dict = bootstrap_metrics(
-                data['gt'], 
-                data['pac']['mean'],
-                n_bootstrap=n_bootstrap,
-                replace=True,
-            )
-            for metric_name, metric_value in bootstrap_metrics_dict.items():
-                cv_results[fold_index_test][metric_name] = metric_value
 
         # Val metrics
-        cv_results[fold_index_test]['log_loss_val'] = sum(
-            log_loss(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'], eps=1e-16)
-            for i in range(5)
-        ) / 5
-        cv_results[fold_index_test]['f1_score_val'] = sum(
-            f1_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'] > 0.5)
-            for i in range(5)
-        ) / 5
-        cv_results[fold_index_test]['roc_auc_val'] = sum(
-            roc_auc_score(data['pac'][i]['gt_val'], data['pac'][i]['y_proba_val'])
-            for i in range(5)
-        ) / 5
-
-        # Bootstrap metrics on n_bootstrap val sets with downsampled negative class
-        bootstrap_metrics_dict_outer = defaultdict(list)
-        for i in range(5):
-            bootstrap_metrics_dict = bootstrap_metrics(
-                data['pac'][i]['gt_val'], 
-                data['pac'][i]['y_proba_val'],
-                n_bootstrap=n_bootstrap,
-                replace=True,
+        val_metrics = []
+        for fold_index in range(5):
+            val_metrics.append(
+                calculate_metrics(
+                    data['pac'][fold_index]['gt_val'], 
+                    data['pac'][fold_index]['y_proba_val'], 
+                    n_bootstrap=n_bootstrap
+                )
             )
-            for metric_name, metric_value in bootstrap_metrics_dict.items():
-                bootstrap_metrics_dict_outer[metric_name].append(metric_value)
-        for metric_name, metric_value in bootstrap_metrics_dict_outer.items():
-            cv_results[fold_index_test][metric_name + '_val'] = sum(bootstrap_metrics_dict_outer[metric_name]) / 5
+        for metric_name in val_metrics[0].keys():
+            cv_results[fold_index_test][metric_name + '_val'] = sum(val_metric[metric_name] for val_metric in val_metrics) / 5
 
         # Raw data
         cv_results[fold_index_test]['data'] = data
