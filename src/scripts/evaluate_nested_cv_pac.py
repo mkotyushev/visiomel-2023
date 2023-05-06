@@ -164,32 +164,32 @@ for fold_index_test in tqdm(range(5)):
         data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
 
     # Mean test predictions over folds
-    data['pac'][-1] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
+    data['pac']['mean'] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
 
     # GT
     X_test, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
-    data['gt'][-1] = y_test
+    data['gt'] = y_test
 
     # Metrics
     # Log loss
-    cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'][-1], data['pac'][-1], eps=1e-16)
+    cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'], data['pac']['mean'], eps=1e-16)
 
     # F1 score
     cv_results[fold_index_test]['f1_score'] = f1_score(
-        data['gt'][-1],
-        data['pac'][-1] > 0.5,
+        data['gt'],
+        data['pac']['mean'] > 0.5,
     )
 
     # ROC AUC
     cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
-        data['gt'][-1],
-        data['pac'][-1],
+        data['gt'],
+        data['pac']['mean'],
     )
 
     # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
     bootstrap_metrics_dict = bootstrap_metrics(
-        data['gt'][-1], 
-        data['pac'][-1],
+        data['gt'], 
+        data['pac']['mean'],
         n_bootstrap=n_bootstrap,
         replace=True,
     )
