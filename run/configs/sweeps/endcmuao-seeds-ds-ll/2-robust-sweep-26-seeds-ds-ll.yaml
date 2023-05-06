@@ -1,5 +1,5 @@
 # robust-sweep-26, best by ds ll: /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=256 --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.06029395329523096 --model.init_args.attention_hidden_dim=128 --model.init_args.attention_num_heads=4 --model.init_args.label_smoothing=0.0271351142571296 --model.lr=0.0030619779618774787 --trainer.max_epochs=100
-name: endcmuao-seeds-ds-ll
+name: robust-sweep-26-seeds-ds-ll
 program: run/main_cv.py
 command:
   - ${env}
