@@ -33,10 +33,14 @@ def get_runs_info(checkpoints_dir: Path, wandb_logs_dir: Path):
                 continue
             with config_path.open() as f:
                 config = yaml.safe_load(f)
+            if 'fold_index_test' not in config['data']['init_args']:
+                print(f'no fold_index_test in config.yaml for {name} in {config_path}, skipping')
+                continue
             run_info[name] = {
                 'fold_index_test': config['data']['init_args']['fold_index_test'],
                 'fold_index': config['data']['init_args']['fold_index'],
                 'checkpoint_paths': list(map(str, (checkpoint_dir / 'checkpoints').glob('*.ckpt'))),
+                'config_path': config_path,
             }            
 
     return run_info 
