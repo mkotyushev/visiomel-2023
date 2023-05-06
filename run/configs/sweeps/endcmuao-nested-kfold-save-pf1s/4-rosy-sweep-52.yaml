@@ -1,6 +1,6 @@
 # rosy-sweep-52: /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=128 --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.04312334623490168 --model.init_args.attention_hidden_dim=128 --model.init_args.attention_num_heads=1 --model.init_args.label_smoothing=0.05843571552736478 --model.lr=0.002740351806608384 --trainer.max_epochs=100
 name: rosy-sweep-52-seeds-ds-ll
-program: run/main.py
+program: run/main_cv.py
 command:
   - ${env}
   - /root/miniconda3/envs/visiomel-2023/bin/python
@@ -46,22 +46,9 @@ parameters:
     distribution: categorical
     values:
     - 0.05843571552736478
-  data.init_args.k:
-    distribution: categorical
-    values:
-    - 5
   data.init_args.k_test:
     distribution: categorical
     values:
-    - 5
-  data.init_args.fold_index:
-    distribution: categorical
-    values:
-    - 0
-    - 1
-    - 2
-    - 3
-    - 4
     - 5
   data.init_args.fold_index_test:
     distribution: categorical
