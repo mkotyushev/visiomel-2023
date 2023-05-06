@@ -3,8 +3,12 @@
 
 import argparse
 from collections import defaultdict
+from pathlib import Path
+import sys
+from typing import Any, Dict, Optional, Set, Union
 
 import numpy as np
+from pytorch_lightning import LightningDataModule, LightningModule
 from sklearn.metrics import f1_score, log_loss, roc_auc_score
 import torch
 from tqdm import tqdm
@@ -18,8 +22,8 @@ logging.basicConfig(level=logging.INFO)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--checkpoint_root_dir', type=str, default='./visiomel')
-parser.add_argument('--logs_dir', type=str, default='./wandb')
+parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
+parser.add_argument('--logs_dir', type=Path, default='./wandb')
 
 args = parser.parse_args()
 
@@ -75,6 +79,31 @@ def bootstrap_metrics(y_true: np.array, y_proba: np.array, n_bootstrap=1000, rep
     return {metric_name: np.mean(metric_values) for metric_name, metric_values in metrics.items()}
 
 
+# Workaround to avoid error: 'Configuration check failed :: 
+# No action for destination key "ckpt_path" to check its value.'
+# whenn run=False and PL-generated config file is used
+sys.argv = sys.argv[:1]
+
+
+class MyLightningCLINoRun(MyLightningCLI):
+    @staticmethod
+    def subcommands() -> Dict[str, Set[str]]:
+        """Defines the list of available subcommands and the arguments to skip."""
+        return {**MyLightningCLI.subcommands(), 'no_run': {"model", "dataloaders", "datamodule"}}
+
+
+class TrainerWandbNoRun(TrainerWandb):
+    def no_run(
+        self,
+        model: Optional[LightningModule] = None,
+        dataloaders: Optional[Union[Any, LightningDataModule]] = None,
+        datamodule: Optional[LightningDataModule] = None,
+        return_predictions: Optional[bool] = None,
+        ckpt_path: Optional[str] = None,
+    ):
+        pass
+
+
 n_bootstrap = 1000
 
 cv_results = defaultdict(dict)
@@ -82,16 +111,17 @@ for fold_index_test in tqdm(range(5)):
     # PAC model
     data = defaultdict(dict)
     for fold_index in tqdm(range(5)):
-        cli = MyLightningCLI(
-            trainer_class=TrainerWandb, 
+        cli = MyLightningCLINoRun(
+            trainer_class=TrainerWandbNoRun, 
             save_config_kwargs={
                 'config_filename': 'config_pl.yaml',
                 'overwrite': True,
             },
             args=[
-                '--config', fold_to_ckpt_info[fold_index_test][fold_index]['config_path'],
+                'no_run',
+                '--config', str(fold_to_ckpt_info[fold_index_test][fold_index]['config_path']),
             ],
-            run=False,
+            run=True,
         )
 
         # Patch attention model
@@ -133,12 +163,13 @@ for fold_index_test in tqdm(range(5)):
     )
 
     # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
-    for metric_name, metric_value in bootstrap_metrics(
+    bootstrap_metrics_dict = bootstrap_metrics(
         data['gt'][-1], 
         data['pac'][-1],
         n_bootstrap=n_bootstrap,
         replace=True,
-    ):
+    )
+    for metric_name, metric_value in bootstrap_metrics_dict.items():
         cv_results[fold_index_test][metric_name] = metric_value
 
 # Print results
