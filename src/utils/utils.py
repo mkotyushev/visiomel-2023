@@ -702,3 +702,10 @@ class SavePredictionsCallback(Callback):
             }
         )
         df.to_csv(self.save_path, index=False)
+
+
+def oldest_checkpoint(filenames):
+    filenames = [filename for filename in filenames if 'epoch' in filename]
+    # format is epoch={epoch}-step={step}.ckpt
+    # get path with largest step
+    return sorted(filenames, key=lambda x: int(x.split('=')[2].split('.')[0]))[-1]
