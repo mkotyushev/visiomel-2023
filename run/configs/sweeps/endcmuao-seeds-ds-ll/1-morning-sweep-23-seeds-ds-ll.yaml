@@ -1,0 +1,61 @@
+# morning-sweep-23, best by pf1s and ll: /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=32 --data.init_args.sampler=none --model.init_args.attention_dropout=0.12127627181448346 --model.init_args.attention_hidden_dim=32 --model.init_args.attention_num_heads=4 --model.init_args.label_smoothing=0.08744739931761468 --model.lr=0.0027684700599901507 --trainer.max_epochs=100
+name: endcmuao-seeds-ds-ll
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/sweeps/swin-patch-attention-classifier.yaml
+  - ${args}
+method: grid
+metric:
+  goal: minimize
+  name: mean_best_val_ds_ll
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 100
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 32
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 4
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 32
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - none
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.12127627181448346
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.0027684700599901507
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.08744739931761468
+  data.init_args.split_seed:
+    distribution: categorical
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
