@@ -18,10 +18,6 @@ parameters:
     distribution: categorical
     values: 
     - 100
-  trainer.weights_save_path:
-    distribution: categorical
-    values: 
-    - /workspace/visiomel-2023/run/weights/morning-sweep-23-nested-kfold-save-pf1s
   model.init_args.attention_hidden_dim:
     distribution: categorical
     values:
