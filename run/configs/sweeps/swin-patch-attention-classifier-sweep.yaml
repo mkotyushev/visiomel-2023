@@ -46,6 +46,7 @@ parameters:
     distribution: categorical
     values:
     - weighted_upsampling
+    - none
   model.init_args.attention_dropout:
     distribution: uniform
     max: 0.3
