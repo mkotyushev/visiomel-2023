@@ -73,7 +73,7 @@ def bootstrap_metrics(y_true: np.array, y_proba: np.array, n_bootstrap=1000, rep
             ],
             axis=0,
         )
-        metrics['log_loss_bs'].append(log_loss(y_true_downsampled, y_proba_downsampled))
+        metrics['log_loss_bs'].append(log_loss(y_true_downsampled, y_proba_downsampled, eps=1e-16))
         metrics['f1_score_bs'].append(f1_score(y_true_downsampled, y_proba_downsampled > 0.5))
         metrics['roc_auc_bs'].append(roc_auc_score(y_true_downsampled, y_proba_downsampled))
     return {metric_name: np.mean(metric_values) for metric_name, metric_values in metrics.items()}
@@ -124,7 +124,29 @@ for fold_index_test in tqdm(range(5)):
             run=True,
         )
 
-        # Patch attention model
+        data['pac'][fold_index] = {}
+        # Predict on val
+        cli.datamodule.setup()
+        y_proba = torch.softmax(
+            torch.concat(
+                cli.trainer.predict(
+                    model=cli.model,
+                    dataloaders=cli.datamodule.val_dataloader()[0],  # only not downsampled
+                    return_predictions=True,
+                    ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
+                ), 
+                dim=0
+            ).float(), 
+            dim=1
+        ).numpy()
+        _, y_val, _ = get_X_y_groups(cli.datamodule.val_dataset.data)
+        data['pac'][fold_index]['val_metrics'] = {
+            'log_loss': log_loss(y_val, y_proba[:, 1], eps=1e-16),
+            'f1_score': f1_score(y_val, y_proba[:, 1] > 0.5),
+            'roc_auc': roc_auc_score(y_val, y_proba[:, 1]),
+        }
+
+        # Predict on test
         y_proba = torch.softmax(
             torch.concat(
                 cli.trainer.predict(
@@ -137,18 +159,18 @@ for fold_index_test in tqdm(range(5)):
             ).float(), 
             dim=1
         ).numpy()
-        data['pac'][fold_index] = y_proba[:, 1]
+        data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
 
-    # Mean over folds
-    data['pac'][-1] = np.mean(np.stack(list(data['pac'].values())), axis=0)
+    # Mean test predictions over folds
+    data['pac'][-1] = np.mean(np.stack(list([data['pac'][i]['y_proba_test'] for i in range(5)])), axis=0)
 
     # GT
     X_test, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
     data['gt'][-1] = y_test
 
     # Metrics
-    # Log loss on test set
-    cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'][-1], data['pac'][-1])
+    # Log loss
+    cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'][-1], data['pac'][-1], eps=1e-16)
 
     # F1 score
     cv_results[fold_index_test]['f1_score'] = f1_score(
@@ -171,6 +193,10 @@ for fold_index_test in tqdm(range(5)):
     )
     for metric_name, metric_value in bootstrap_metrics_dict.items():
         cv_results[fold_index_test][metric_name] = metric_value
+
+    # Val metrics
+    for metric_name in data['pac'][0]['val_metrics']:
+        cv_results[fold_index_test][metric_name + '_val'] = sum(data['pac'][i]['val_metrics'][metric_name] for i in range(5)) / 5
 
 # Print results
 print('========================================')
