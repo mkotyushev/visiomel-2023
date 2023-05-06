@@ -5,3 +5,4 @@ visiomel*/
 weights/
 pipe/
 *.csv
+nested-kfold-checkpoints/
