@@ -73,9 +73,9 @@ def bootstrap_metrics(y_true: np.array, y_proba: np.array, n_bootstrap=1000, rep
             ],
             axis=0,
         )
-        metrics['log_loss'].append(log_loss(y_true_downsampled, y_proba_downsampled))
-        metrics['f1_score'].append(f1_score(y_true_downsampled, y_proba_downsampled > 0.5))
-        metrics['roc_auc'].append(roc_auc_score(y_true_downsampled, y_proba_downsampled))
+        metrics['log_loss_bs'].append(log_loss(y_true_downsampled, y_proba_downsampled))
+        metrics['f1_score_bs'].append(f1_score(y_true_downsampled, y_proba_downsampled > 0.5))
+        metrics['roc_auc_bs'].append(roc_auc_score(y_true_downsampled, y_proba_downsampled))
     return {metric_name: np.mean(metric_values) for metric_name, metric_values in metrics.items()}
 
 
