@@ -5,7 +5,7 @@ import argparse
 from collections import defaultdict
 
 import numpy as np
-from sklearn.metrics import f1_score, log_loss
+from sklearn.metrics import f1_score, log_loss, roc_auc_score
 import torch
 from tqdm import tqdm
 
@@ -42,11 +42,11 @@ for fold_index_test, fold_info in fold_to_ckpt_info.items():
     )
 
 
-def bootstrap_log_loss(y_true: np.array, y_proba: np.array, n_bootstrap=1000, replace=True):
+def bootstrap_metrics(y_true: np.array, y_proba: np.array, n_bootstrap=1000, replace=True):
     neg_class_indices = np.arange(y_true.shape[0])[y_true == 0]
     pos_class_indices = np.arange(y_true.shape[0])[y_true == 1]
 
-    log_losses = []
+    metrics = defaultdict(list)
     for _ in range(n_bootstrap):
         # Downsample y_true and y_proba negative class
         # keep all positive class
@@ -69,8 +69,10 @@ def bootstrap_log_loss(y_true: np.array, y_proba: np.array, n_bootstrap=1000, re
             ],
             axis=0,
         )
-        log_losses = log_loss(y_true_downsampled, y_proba_downsampled)
-    return np.mean(log_losses)
+        metrics['log_loss'].append(log_loss(y_true_downsampled, y_proba_downsampled))
+        metrics['f1_score'].append(f1_score(y_true_downsampled, y_proba_downsampled > 0.5))
+        metrics['roc_auc'].append(roc_auc_score(y_true_downsampled, y_proba_downsampled))
+    return {metric_name: np.mean(metric_values) for metric_name, metric_values in metrics.items()}
 
 
 n_bootstrap = 1000
@@ -118,16 +120,35 @@ for fold_index_test in tqdm(range(5)):
     # Log loss on test set
     cv_results[fold_index_test]['log_loss'] = log_loss(data['gt'][-1], data['pac'][-1])
 
-    # Log loss bootstrap of n_bootstrap test sets with downsampled negative class
-    cv_results[fold_index_test]['log_loss_bootstrap'] = bootstrap_log_loss(
-        data['gt'][-1], 
-        data['pac'][-1],
-        n_bootstrap=n_bootstrap,
-        replace=True,
-    )
-
     # F1 score
     cv_results[fold_index_test]['f1_score'] = f1_score(
         data['gt'][-1],
         data['pac'][-1] > 0.5,
     )
+
+    # ROC AUC
+    cv_results[fold_index_test]['roc_auc'] = roc_auc_score(
+        data['gt'][-1],
+        data['pac'][-1],
+    )
+
+    # Bootstrap metrics on n_bootstrap test sets with downsampled negative class
+    for metric_name, metric_value in bootstrap_metrics(
+        data['gt'][-1], 
+        data['pac'][-1],
+        n_bootstrap=n_bootstrap,
+        replace=True,
+    ):
+        cv_results[fold_index_test][metric_name] = metric_value
+
+# Print results
+print('========================================')
+for fold_index_test, fold_results in cv_results.items():
+    print(f'Fold {fold_index_test}')
+    for metric_name, metric_value in fold_results.items():
+        print(f'\t{metric_name}: {metric_value}')
+    print()
+
+print('========================================')
+for metric_name in cv_results[0].keys():
+    print(f'{metric_name}: {np.mean([fold_results[metric_name] for fold_results in cv_results.values()])}')
