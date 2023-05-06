@@ -702,6 +702,9 @@ class SavePredictionsCallback(Callback):
             }
         )
         df.to_csv(self.save_path, index=False)
+        
+        self.predictions = []
+        self.filenames = []
 
 
 def oldest_checkpoint(filenames):
