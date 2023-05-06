@@ -1,0 +1,60 @@
+# giddy-sweep-13, top-2 best by p1fs: /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=256 --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.094741078668523 --model.init_args.attention_hidden_dim=128 --model.init_args.attention_num_heads=1 --model.init_args.label_smoothing=0.0410217012351048 --model.lr=0.008399705029205697 --trainer.max_epochs=100
+name: giddy-sweep-13-nested-kfold-save-ds-ll
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/swin-patch-attention-classifier-val-ds-ll.yaml
+  - ${args}
+method: grid
+metric:
+  goal: minimize
+  name: mean_best_val_ds_ll
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 100
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 128
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 1
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 256
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.094741078668523
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.008399705029205697
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.0410217012351048
+  data.init_args.k_test:
+    distribution: categorical
+    values:
+    - 5
+  data.init_args.fold_index_test:
+    distribution: categorical
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
