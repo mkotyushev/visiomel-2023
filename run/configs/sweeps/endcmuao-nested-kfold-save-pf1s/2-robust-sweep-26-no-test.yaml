@@ -1,0 +1,48 @@
+# robust-sweep-26, best by ds ll: /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=256 --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.06029395329523096 --model.init_args.attention_hidden_dim=128 --model.init_args.attention_num_heads=4 --model.init_args.label_smoothing=0.0271351142571296 --model.lr=0.0030619779618774787 --trainer.max_epochs=100
+name: robust-sweep-26-nested-kfold-save-pf1s
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/swin-patch-attention-classifier.yaml
+  - ${args}
+method: grid
+metric:
+  goal: maximize
+  name: mean_best_val_pf1s
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 100
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 128
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 4
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 256
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.06029395329523096
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.0030619779618774787
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.0271351142571296
