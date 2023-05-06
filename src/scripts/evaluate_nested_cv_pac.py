@@ -208,11 +208,15 @@ print('========================================')
 for fold_index_test, fold_results in cv_results.items():
     print(f'Fold {fold_index_test}')
     for metric_name, metric_value in fold_results.items():
+        if metric_name == 'data':
+            continue
         print(f'\t{metric_name}: {metric_value}')
     print()
 
 print('========================================')
 for metric_name in cv_results[0].keys():
+    if metric_name == 'data':
+        continue
     print(f'{metric_name}: {np.mean([fold_results[metric_name] for fold_results in cv_results.values()])}')
 
 # Save results to file in pickle format
