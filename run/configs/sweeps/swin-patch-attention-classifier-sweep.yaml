@@ -32,6 +32,7 @@ parameters:
     - 2
     - 4
     - 8
+    - 16
   data.init_args.batch_size:
     distribution: categorical
     values:
@@ -41,7 +42,6 @@ parameters:
   data.init_args.sampler:
     distribution: categorical
     values:
-    - none
     - weighted_upsampling
   model.init_args.attention_dropout:
     distribution: uniform
