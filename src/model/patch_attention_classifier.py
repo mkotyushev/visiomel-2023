@@ -165,18 +165,18 @@ class PatchAttentionPooling(nn.Module):
         # pandas qcut with 4 bins
         # ~ [-10.0, 50.0, 63.0, 72.0, 1000.0] on train dataset
         # unknown in the firsts interval with 0.0
-        self.age_emb = nn.Parameter(torch.randn(1, 4, hidden_dim))
+        self.age_emb = nn.Parameter(torch.randn(1, 4, embed_dim))
 
         # 0 + unknown, 1
-        self.sex_emb = nn.Parameter(torch.randn(1, 2, hidden_dim))
+        self.sex_emb = nn.Parameter(torch.randn(1, 2, embed_dim))
 
         # some of 20 body sites are underrepresented in the train dataset
         # and some are essentially the same, so group it (see stats above)
         # 0 = upper and unknown, 1 = center, 2 = head, 3 = lower
-        self.body_site_emb = nn.Parameter(torch.randn(1, 4, hidden_dim))
+        self.body_site_emb = nn.Parameter(torch.randn(1, 4, embed_dim))
 
         # 0 = no, 1 = yes, 2 = unknown
-        self.melanoma_history_emb = nn.Parameter(torch.randn(1, 3, hidden_dim))
+        self.melanoma_history_emb = nn.Parameter(torch.randn(1, 3, embed_dim))
 
         self.attention = nn.MultiheadAttention(
             embed_dim=hidden_dim, 
@@ -200,14 +200,14 @@ class PatchAttentionPooling(nn.Module):
             # meta[:, 1] - sex 0 or 1, index of sex embedding
             # meta[:, 2] - body_site 0, 1, 2 or 3, index of body site embedding
             # meta[:, 3] - melanoma_history 0, 1 or 2, index of melanoma history embedding
-            age_emb = self.age_emb[:, meta[:, 0]].permute(0, 1)  # (B, 1, E)
-            sex_emb = self.sex_emb[:, meta[:, 1]].permute(0, 1)  # (B, 1, E)
-            body_site_emb = self.body_site_emb[:, meta[:, 2]].permute(0, 1)  # (B, 1, E)
-            melanoma_history_emb = self.melanoma_history_emb[:, meta[:, 3]].permute(0, 1)  # (B, 1, E)
+            age_emb = self.age_emb[:, meta[:, 0]].permute(1, 0, 2)  # (B, 1, E)
+            sex_emb = self.sex_emb[:, meta[:, 1]].permute(1, 0, 2)  # (B, 1, E)
+            body_site_emb = self.body_site_emb[:, meta[:, 2]].permute(1, 0, 2)  # (B, 1, E)
+            melanoma_history_emb = self.melanoma_history_emb[:, meta[:, 3]].permute(1, 0, 2)  # (B, 1, E)
 
-            x = torch.stack((age_emb, sex_emb, body_site_emb, melanoma_history_emb, x), dim=1)  # (B, 4 + L, E)
+            x = torch.cat((age_emb, sex_emb, body_site_emb, melanoma_history_emb, x), dim=1)  # (B, 4 + L, E)
             if mask is not None:
-                mask = torch.cat((torch.ones(B, 4, dtype=torch.bool), mask), dim=1)
+                mask = torch.cat((torch.ones(B, 4, dtype=torch.bool, device=mask.device), mask), dim=1)
 
         # key and value are the same, so mask should be
         # the same for both
@@ -339,13 +339,13 @@ class PatchAttentionClassifier(VisiomelClassifier):
     
     def update_train_metrics(self, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[2].detach().cpu(), preds[:, 1].detach().cpu().float()
+        y, y_pred = batch[3].detach().cpu(), preds[:, 1].detach().cpu().float()
         for _, metric in self.train_metrics.items():
             metric.update(y_pred, y)
 
     def update_val_metrics(self, preds, batch, dataloader_idx=0):
         """Update val metrics."""
-        y, y_pred = batch[2].detach().cpu(), preds[:, 1].detach().cpu().float()
+        y, y_pred = batch[3].detach().cpu(), preds[:, 1].detach().cpu().float()
         if dataloader_idx == 0:
             for _, metric in self.val_metrics.items():
                 # bug in BinaryConfusionMatrix resets it to GPU
