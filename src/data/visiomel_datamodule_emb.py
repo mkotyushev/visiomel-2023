@@ -15,11 +15,14 @@ from .datasets import EmbeddingDataset, SubsetDataset
 logger = logging.getLogger(__name__)
 
 
-def build_downsampled_kfold_datasets(
+def build_downsampled_datasets(
     dataset: Union[SubsetDataset, Dataset], 
     k: int = 5, 
-    random_state: int = 0
+    random_state: int = 0,
+    method: str = 'kfold',
 ) -> List[SubsetDataset]:
+    assert method in ['kfold', 'bootstrap'], "incorrect method"
+
     # Wrap dataset into SubsetDataset if needed
     if isinstance(dataset, SubsetDataset):
         subset_dataset = dataset
@@ -42,19 +45,35 @@ def build_downsampled_kfold_datasets(
     cached_dataset = subset_dataset.subset.dataset
 
     subset_datasets = []
-    kfold = KFold(n_splits=k, shuffle=True, random_state=random_state)
-    for _, keep_negative_indices in kfold.split(target_to_indices[0]):
-        # Here we need to copy the dataset to avoid changing 
-        # the original one
-        subset_dataset_current = deepcopy(subset_dataset)
-        subset_dataset_current.subset.dataset = cached_dataset
 
-        # Update indices
-        subset_dataset_current.subset.indices = [
-            *[target_to_indices[0][i] for i in keep_negative_indices],
-            *target_to_indices[1]
-        ]
-        subset_datasets.append(subset_dataset_current)
+    if method == 'kfold':
+        kfold = KFold(n_splits=k, shuffle=True, random_state=random_state)
+        for _, keep_negative_indices in kfold.split(target_to_indices[0]):
+            # Here we need to copy the dataset to avoid changing 
+            # the original one
+            subset_dataset_current = deepcopy(subset_dataset)
+            subset_dataset_current.subset.dataset = cached_dataset
+
+            # Update indices
+            subset_dataset_current.subset.indices = [
+                *[target_to_indices[0][i] for i in keep_negative_indices],
+                *target_to_indices[1]
+            ]
+            subset_datasets.append(subset_dataset_current)
+    else:
+        # Bootstrap
+        for _ in range(k):
+            # Here we need to copy the dataset to avoid changing 
+            # the original one
+            subset_dataset_current = deepcopy(subset_dataset)
+            subset_dataset_current.subset.dataset = cached_dataset
+
+            # Update indices
+            subset_dataset_current.subset.indices = [
+                *np.random.choice(target_to_indices[0], size=len(target_to_indices[1]), replace=True),
+                *target_to_indices[1]
+            ]
+            subset_datasets.append(subset_dataset_current)
     
     return subset_datasets
 
@@ -137,8 +156,6 @@ def check_no_split_intersection(
 
 
 class VisiomelDatamoduleEmb(LightningDataModule):
-    val_dataset_downsampled_k = 5
-
     def __init__(
         self,
         embedding_pathes: List[str],	
@@ -155,6 +172,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
         num_workers_saturated: int = 0,
+        val_dataset_downsampled_k: int = 30,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -215,10 +233,11 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 # Check that train and val datasets do not intersect
                 # in terms of filenames
                 check_no_split_intersection(self.train_dataset, self.val_dataset, self.test_dataset)
-                self.val_dataset_downsampled = build_downsampled_kfold_datasets(
+                self.val_dataset_downsampled = build_downsampled_datasets(
                     self.val_dataset, 
-                    k=self.val_dataset_downsampled_k, 
-                    random_state=self.hparams.split_seed
+                    k=self.hparams.val_dataset_downsampled_k, 
+                    random_state=self.hparams.split_seed,
+                    method='bootstrap',
                 )
             else:
                 self.train_dataset = EmbeddingDataset(self.hparams.embedding_pathes)

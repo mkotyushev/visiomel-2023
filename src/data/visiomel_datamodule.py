@@ -143,8 +143,6 @@ class MaskGenerator:
 
 
 class VisiomelDatamodule(LightningDataModule):
-    val_dataset_downsampled_k = 1
-
     def __init__(
         self,
         task: str = 'classification',
@@ -170,6 +168,7 @@ class VisiomelDatamodule(LightningDataModule):
         mask_ratio: float = 0.6,
         train_transform_n_repeats: Optional[int] = None,
         val_repeats_aug: bool = False,
+        val_dataset_downsampled_k: int = 1,
     ):
         super().__init__()
         self.save_hyperparameters()
