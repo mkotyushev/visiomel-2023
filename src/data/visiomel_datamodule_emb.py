@@ -129,15 +129,17 @@ def masked_collate_fn(batch):
     # Pad & pack sequences with different lengths to max length
     # across the batch, create bool mask for padded values
 
-    X = [torch.from_numpy(x) for x, _, _ in batch]
-    y = default_collate([y_ for _, y_, _ in batch])
-    paths = [path for _, _, path in batch]
+    X = [torch.from_numpy(x) for x, _, _, _ in batch]
+    meta = default_collate([torch.from_numpy(meta_).long() for _, meta_, _, _ in batch])
+    y = default_collate([y_ for _, _, y_, _ in batch])
+    paths = [path for _, _, _, path in batch]
 
     lengths = torch.tensor([len(x) for x in X])
     mask = ~torch.nn.utils.rnn.pad_sequence([torch.ones(l) for l in lengths], batch_first=True).bool()
     X = torch.nn.utils.rnn.pad_sequence(X, batch_first=True)
 
-    return X, mask, y, paths
+    # x, mask, meta, y, cache_key = batch
+    return X, mask, meta, y, paths
 
 
 def check_no_split_intersection(
