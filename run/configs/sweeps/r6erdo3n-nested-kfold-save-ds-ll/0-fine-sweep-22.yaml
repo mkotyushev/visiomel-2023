@@ -1,0 +1,70 @@
+# fine-sweep-22, best by ds-ll and pf1s, second best by ll: 
+# /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml 
+# --data.init_args.batch_size=32 
+# --data.init_args.sampler=weighted_upsampling 
+# --model.init_args.attention_dropout=0.0800181722639623 
+# --model.init_args.attention_hidden_dim=512 
+# --model.init_args.attention_num_heads=8 
+# --model.init_args.label_smoothing=0.007637851127894835 
+# --model.lr=0.002651321160583576 
+# --trainer.max_epochs=30
+# https://wandb.ai/mkotyushev_/visiomel/runs/h85wj7b4/overview?workspace=user-mkotyushev_
+name: fine-sweep-22-nested-kfold-save-ds-ll
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/swin-patch-attention-classifier-val-ds-ll.yaml
+  - ${args}
+method: grid
+metric:
+  goal: minimize
+  name: mean_best_val_ds_ll
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 30
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 512
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 8
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 32
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.0800181722639623
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.002651321160583576
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.007637851127894835
+  data.init_args.k_test:
+    distribution: categorical
+    values:
+    - 5
+  data.init_args.fold_index_test:
+    distribution: categorical
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
