@@ -47,6 +47,12 @@ class VisiomelModel(LightningModule):
     def bootstrap_metric(self, preds, targets, metric: Metric):
         """Calculate metric on bootstrap samples."""
 
+    @staticmethod
+    def check_batch_dims(batch):
+        assert all(map(lambda x: len(x) == len(batch[0]), batch)), \
+            f'All entities in batch must have the same length, got ' \
+            f'{list(map(len, batch))}'
+
     def update_metrics(self, span, preds, batch):
         """Update train metrics."""
         y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
@@ -98,6 +104,7 @@ class VisiomelModel(LightningModule):
                 on_step=True,
                 on_epoch=True,
                 prog_bar=True,
+                batch_size=batch[0].shape[0],
             )
         self.update_metrics('train_metrics', preds, batch)
 
@@ -131,7 +138,8 @@ class VisiomelModel(LightningModule):
                 on_step=False,
                 on_epoch=True,
                 prog_bar=True,
-                add_dataloader_idx=False
+                add_dataloader_idx=False,
+                batch_size=batch[0].shape[0],
             )
         self.update_metrics('val_metrics', preds, batch)
         return total_loss

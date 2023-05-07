@@ -75,6 +75,8 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
         return self.model(x)
     
     def compute_loss_preds(self, batch, *args, **kwargs):
+        self.check_batch_dims(batch)
+        
         x, y = batch
         out = self(x)
         

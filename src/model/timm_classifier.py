@@ -43,6 +43,8 @@ class TimmClassifier(VisiomelClassifier):
         return self.classifier(x)
     
     def compute_loss_preds(self, batch, *args, **kwargs):
+        self.check_batch_dims(batch)
+        
         x, y = batch
         preds = self(x)
         loss = self.loss_fn(preds, y)

@@ -308,6 +308,8 @@ class PatchAttentionClassifier(VisiomelClassifier):
         self.unfreeze_only_selected()
     
     def compute_loss_preds(self, batch, *args, **kwargs):
+        self.check_batch_dims(batch)
+        
         x, mask, meta, y, cache_key = None, None, None, None, None
         if len(batch) == 2:
             x, y = batch
