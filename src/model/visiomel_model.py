@@ -53,9 +53,24 @@ class VisiomelModel(LightningModule):
             f'All entities in batch must have the same length, got ' \
             f'{list(map(len, batch))}'
 
+    def extract_targets_and_preds_for_metric(self, preds, batch):
+        """Extract preds and targets from batch.
+        Could be overriden for custom batch / prediction structure.
+        """
+        y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
+        return y, y_pred
+
     def update_metrics(self, span, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
+        y, y_pred = self.extract_targets_and_preds_for_metric(preds, batch)
+        nan_mask = torch.isnan(y_pred)
+        if nan_mask.any():
+            logger.warning(
+                f'Got {nan_mask.sum()} / {nan_mask.shape[0]} nan values in update_metrics. '
+                f'Dropping them & corresponding targets.'
+            )
+            y_pred = y_pred[~nan_mask]
+            y = y[~nan_mask]
         self.cat_metrics[span]['preds'].update(y_pred)
         self.cat_metrics[span]['targets'].update(y)
 
@@ -123,6 +138,8 @@ class VisiomelModel(LightningModule):
                     f'Loss {loss_name} is nan at epoch {self.current_epoch} '
                     f'step {self.global_step}.'
                 )
+        # TODO: check why uncommenting this leads to upscaling issues
+        # see https://wandb.ai/mkotyushev_/visiomel/runs/7u5qb1ln/logs?workspace=user-mkotyushev_
         if has_nan:
             return None
         

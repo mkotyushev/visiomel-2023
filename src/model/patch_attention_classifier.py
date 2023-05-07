@@ -340,12 +340,19 @@ class PatchAttentionClassifier(VisiomelClassifier):
         x = self.classifier(x)
         
         return x
-    
-    def update_metrics(self, span, preds, batch):
-        """Update train metrics."""
+
+    def extract_targets_and_preds_for_metric(self, preds, batch):
+        """Extract preds and targets from batch.
+        Could be overriden for custom batch / prediction structure.
+        """
         if len(batch) == 4:  # no meta: x, mask, y, path
             y, y_pred = batch[2].detach(), preds[:, 1].detach().float()
         elif len(batch) == 5:  # with meta: x, mask, meta, y, path
             y, y_pred = batch[3].detach(), preds[:, 1].detach().float()
-        self.cat_metrics[span]['preds'].update(y_pred)
-        self.cat_metrics[span]['targets'].update(y)
+        else:
+            raise ValueError(
+                f'Wrong batch structure: len(batch) == {len(batch)}, '
+                f'expected 4 or 5'
+            )
+        return y, y_pred
+
