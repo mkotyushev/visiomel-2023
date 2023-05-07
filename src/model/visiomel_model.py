@@ -6,7 +6,7 @@ from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
 import torch
-from torch.nn import ModuleDict, CrossEntropyLoss
+from torch.nn import ModuleDict, ModuleList, CrossEntropyLoss
 from pytorch_lightning.cli import instantiate_class
 from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryStatScores
 from pytorch_lightning.utilities import grad_norm
@@ -119,7 +119,7 @@ class VisiomelModel(LightningModule):
     def validation_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None, **kwargs) -> Tensor:
         total_loss, losses, preds = self.compute_loss_preds(batch, **kwargs)
         val_dataloader_name = 'val' 
-        if dataloader_idx is not None and dataloader_idx == 1:
+        if dataloader_idx is not None and dataloader_idx > 0:
             val_dataloader_name = 'val_ds'
         for loss_name, loss in losses.items():
             self.log(
@@ -128,7 +128,7 @@ class VisiomelModel(LightningModule):
                 on_step=False,
                 on_epoch=True,
                 prog_bar=True,
-                add_dataloader_idx=False
+                add_dataloader_idx=True
             )
         self.update_val_metrics(preds, batch, dataloader_idx)
         return total_loss
@@ -146,6 +146,20 @@ class VisiomelModel(LightningModule):
             prog_bar=prog_bar,
         )
         metric.reset()
+    
+    def log_metric_and_reset_agg(self, name, metrics, on_step=False, on_epoch=True, prog_bar=True):
+        values = []
+        for metric in metrics:
+            values.append(metric.compute())
+            metric.reset()
+        mean = sum(values) / len(values)
+        self.log(
+            name,
+            mean,
+            on_step=on_step,
+            on_epoch=on_epoch,
+            prog_bar=prog_bar,
+        )
 
     def on_train_epoch_end(self) -> None:
         """Called in the training loop at the very end of the epoch."""
@@ -163,29 +177,27 @@ class VisiomelModel(LightningModule):
     
     def on_validation_epoch_end(self) -> None:
         """Called in the validation loop at the very end of the epoch."""
-        if self.val_metrics is None:
-            return
-        for name, metric in self.val_metrics.items():
-            prog_bar = (name == 'f1')
-            self.log_metric_and_reset(
-                f'val_{name}',
-                metric,
-                on_step=False,
-                on_epoch=True,
-                prog_bar=prog_bar,
-            )
+        if self.val_metrics is not None:
+            for name, metric in self.val_metrics.items():
+                prog_bar = (name == 'f1')
+                self.log_metric_and_reset(
+                    f'val_{name}',
+                    metric,
+                    on_step=False,
+                    on_epoch=True,
+                    prog_bar=prog_bar,
+                )
         
-        if self.val_metrics_downsampled is None:
-            return
-        for name, metric in self.val_metrics_downsampled.items():
+        if self.val_metrics_downsampled is not None:
             prog_bar = (name == 'ds_ce')
-            self.log_metric_and_reset(
-                f'val_{name}',
-                metric,
-                on_step=False,
-                on_epoch=True,
-                prog_bar=prog_bar,
-            )
+            for name, metrics in self.val_metrics_downsampled.items():
+                self.log_metric_and_reset_agg(
+                    f'val_{name}',
+                    metrics,
+                    on_step=False,
+                    on_epoch=True,
+                    prog_bar=prog_bar,
+                )
 
     def get_lr_decayed(self, lr, layer_index, layer_name):
         """
@@ -339,6 +351,35 @@ class VisiomelClassifier(VisiomelModel):
             )
         metric.reset()
 
+    def log_metric_and_reset_agg(self, name, metrics, on_step=False, on_epoch=True, prog_bar=True):
+        if type(metrics[0]) is BinaryStatScores:  # no isinstance because other classes inherit from it
+            values = []
+            for metric in metrics:
+                values.append(metric.compute())
+                metric.reset()
+            scores = np.stack(values, axis=0).astype(np.float32).mean(axis=0)
+            for k, v in zip(['tp', 'fp', 'tn', 'fn', 'sup'], scores):
+                self.log(
+                    f'{name}_{k}',
+                    v,
+                    on_step=on_step,
+                    on_epoch=on_epoch,
+                    prog_bar=prog_bar,
+                )
+        else:
+            values = []
+            for metric in metrics:
+                values.append(metric.compute())
+                metric.reset()
+            mean = sum(values) / len(values)
+            self.log(
+                name,
+                mean,
+                on_step=on_step,
+                on_epoch=on_epoch,
+                prog_bar=prog_bar,
+            )
+
     def configure_metrics(self):
         """Configure task-specific metrics."""
         self.train_metrics = ModuleDict(
@@ -375,6 +416,19 @@ class VisiomelClassifier(VisiomelModel):
         for _, metric in self.train_metrics.items():
             metric.update(y_pred, y)
 
+    def clone_val_downsampled_metrics_if_needed(self):
+        # Clone metrics for each downsampled dataset
+        # if have not been cloned yet 
+        # (i. e. if self.val_metrics_downsampled[name] is not list)
+        for name in self.val_metrics_downsampled:
+            if not isinstance(self.val_metrics_downsampled[name], ModuleList):
+                self.val_metrics_downsampled[name] = ModuleList(
+                    [
+                        self.val_metrics_downsampled[name].clone() 
+                        for _ in range(len(self.trainer.datamodule.val_dataset_downsampled))
+                    ]
+                )
+
     def update_val_metrics(self, preds, batch, dataloader_idx=0):
         """Update val metrics."""
         y, y_pred = batch[1].detach().cpu(), preds[:, 1].detach().cpu().float()
@@ -382,5 +436,7 @@ class VisiomelClassifier(VisiomelModel):
             for _, metric in self.val_metrics.items():
                 metric.update(y_pred, y)
         else:
-            for _, metric in self.val_metrics_downsampled.items():
+            self.clone_val_downsampled_metrics_if_needed()
+            for _, metrics in self.val_metrics_downsampled.items():
+                metric = metrics[dataloader_idx - 1]
                 metric.update(y_pred, y)
