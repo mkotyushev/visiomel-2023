@@ -84,9 +84,9 @@ class VisiomelImageFolder(ImageFolder):
         return samples
 
 
-def preprocess_meta(df, debug=False):
+def preprocess_meta_emb(df, debug=True):
     # keep age	sex	body_site	melanoma_history cols
-    df = df.drop(columns=df.columns.difference(['age', 'sex', 'body_site', 'melanoma_history']))
+    df = df.drop(columns=df.columns.difference(['filename', 'age', 'sex', 'body_site', 'melanoma_history']))
 
     # Age: remove nans, convert to float, cut and encode interval by int
     df['age'] = df['age'].fillna('[0:0[')
@@ -170,10 +170,10 @@ class EmbeddingDataset:
         self.data['group'] = self.data['path']
         self.meta = None
         if meta_filepath is not None:
-            self.meta = preprocess_meta(pd.read_csv(meta_filepath))
+            self.meta = preprocess_meta_emb(pd.read_csv(meta_filepath))
             # extract filename replace .png with .tif if needed
             # to match with the meta data
-            self.data['filename'] = self.data['path'].apply(lambda x: x.name.replace('.png', '.tif'))
+            self.data['filename'] = self.data['path'].apply(lambda x: x.split('/')[-1].replace('.png', '.tif'))
             self.data = self.data.merge(self.meta, on='filename', how='left')
             self.data = self.data.drop(columns=['filename'])
 
@@ -200,6 +200,6 @@ class EmbeddingDataset:
         # meta[:, 3] - melanoma_history
         return \
             row['features'], \
-            row[['age', 'sex', 'body_site', 'melanoma_history']], \
+            row[['age', 'sex', 'body_site', 'melanoma_history']].values.astype(int), \
             row['label'], \
             row['path']
