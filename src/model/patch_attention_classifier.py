@@ -241,6 +241,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         attention_num_heads: int = 2,
         attention_dropout: float = 0.2,
         n_bootstrap: int = 1000,
+        skip_nan: bool = False,
     ):
         # Hack to make wandb CV work with nested dicts
         optimizer_init['init_args']['lr'] = lr
@@ -254,6 +255,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
             lr_layer_decay=lr_layer_decay,
             label_smoothing=label_smoothing,
             n_bootstrap=n_bootstrap,
+            skip_nan=skip_nan,
         )
         self.save_hyperparameters()
 
@@ -321,7 +323,10 @@ class PatchAttentionClassifier(VisiomelClassifier):
         elif len(batch) == 5:
             x, mask, meta, y, cache_key = batch
         out = self(x, mask, meta, cache_key=cache_key)
-        loss = self.loss_fn(out, y)
+
+        y_no_nan, out_no_nan = self.remove_nans(y, out)
+        loss = self.loss_fn(out_no_nan, y_no_nan)
+
         return loss, {'ce': loss}, out
 
     def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor, Any]], mask: torch.BoolTensor = None, meta: torch.Tensor = None, cache_key: Any = None) -> torch.Tensor:
@@ -354,5 +359,6 @@ class PatchAttentionClassifier(VisiomelClassifier):
                 f'Wrong batch structure: len(batch) == {len(batch)}, '
                 f'expected 4 or 5'
             )
+        y, y_pred = self.remove_nans(y, y_pred)
         return y, y_pred
 

@@ -29,6 +29,7 @@ class VisiomelModel(LightningModule):
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         n_bootstrap: int = 1000,
+        skip_nan: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -53,24 +54,37 @@ class VisiomelModel(LightningModule):
             f'All entities in batch must have the same length, got ' \
             f'{list(map(len, batch))}'
 
-    def extract_targets_and_preds_for_metric(self, preds, batch):
-        """Extract preds and targets from batch.
-        Could be overriden for custom batch / prediction structure.
-        """
-        y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
-        return y, y_pred
-
-    def update_metrics(self, span, preds, batch):
-        """Update train metrics."""
-        y, y_pred = self.extract_targets_and_preds_for_metric(preds, batch)
+    def remove_nans(self, y, y_pred):
         nan_mask = torch.isnan(y_pred)
+        
+        if nan_mask.ndim > 1:
+            nan_mask = nan_mask.any(dim=1)
+        
         if nan_mask.any():
+            if not self.hparams.skip_nan:
+                raise ValueError(
+                    f'Got {nan_mask.sum()} / {nan_mask.shape[0]} nan values in update_metrics. '
+                    f'Use skip_nan=True to skip them.'
+                )
             logger.warning(
                 f'Got {nan_mask.sum()} / {nan_mask.shape[0]} nan values in update_metrics. '
                 f'Dropping them & corresponding targets.'
             )
             y_pred = y_pred[~nan_mask]
             y = y[~nan_mask]
+        return y, y_pred
+
+    def extract_targets_and_preds_for_metric(self, preds, batch):
+        """Extract preds and targets from batch.
+        Could be overriden for custom batch / prediction structure.
+        """
+        y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
+        y, y_pred = self.remove_nans(y, y_pred)
+        return y, y_pred
+
+    def update_metrics(self, span, preds, batch):
+        """Update train metrics."""
+        y, y_pred = self.extract_targets_and_preds_for_metric(preds, batch)
         self.cat_metrics[span]['preds'].update(y_pred)
         self.cat_metrics[span]['targets'].update(y)
 
@@ -138,8 +152,6 @@ class VisiomelModel(LightningModule):
                     f'Loss {loss_name} is nan at epoch {self.current_epoch} '
                     f'step {self.global_step}.'
                 )
-        # TODO: check why uncommenting this leads to upscaling issues
-        # see https://wandb.ai/mkotyushev_/visiomel/runs/7u5qb1ln/logs?workspace=user-mkotyushev_
         if has_nan:
             return None
         
@@ -212,7 +224,6 @@ class VisiomelModel(LightningModule):
 
             if metric_value is not None:
                 if type(metric) == BinaryStatScores:
-                    metric_value = metric_value.cpu().float()
                     for key, value in zip(['tp', 'fp', 'tn', 'fn', 'sup'], metric_value):
                         self.log(
                             f'{prefix}_{name}_{key}',
@@ -389,6 +400,7 @@ class VisiomelClassifier(VisiomelModel):
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         label_smoothing: float = 0.0,
         n_bootstrap: int = 1000,
+        skip_nan: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -398,6 +410,7 @@ class VisiomelClassifier(VisiomelModel):
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
             n_bootstrap=n_bootstrap,
+            skip_nan=skip_nan,
         )
         self.save_hyperparameters()
         self.loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)

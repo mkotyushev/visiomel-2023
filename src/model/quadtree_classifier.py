@@ -23,6 +23,7 @@ class QuadtreeClassifier(VisiomelClassifier):
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         label_smoothing: float = 0.0,
+        skip_nan: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -32,6 +33,7 @@ class QuadtreeClassifier(VisiomelClassifier):
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
             label_smoothing=label_smoothing,
+            skip_nan=skip_nan,
         )
         self.save_hyperparameters()
 
@@ -70,11 +72,13 @@ class QuadtreeClassifier(VisiomelClassifier):
         self.check_batch_dims(batch)
         
         x, y = batch
-        preds, split_decision_logits = self(x, random_split=False)
-        loss = self.loss_fn(preds, y)
+        out, split_decision_logits = self(x, random_split=False)
+
+        y_no_nan, out_no_nan = self.remove_nans(y, out)
+        loss = self.loss_fn(out_no_nan, y_no_nan)
         
         if not random_split:
-            return loss, {'ce': loss}, preds
+            return loss, {'ce': loss}, out
         
         preds_random_split, random_split_decisions = self(x, random_split=True)
         loss_random_split = F.cross_entropy(preds_random_split, y)
@@ -89,7 +93,7 @@ class QuadtreeClassifier(VisiomelClassifier):
         return loss + loss_split_decision, {
             'ce': loss, 
             'sd': loss_split_decision
-        }, preds
+        }, out
     
     def training_step(self, batch, batch_idx, **kwargs):
         return super().training_step(batch, batch_idx, random_split=True)

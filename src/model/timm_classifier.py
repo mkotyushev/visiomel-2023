@@ -20,6 +20,7 @@ class TimmClassifier(VisiomelClassifier):
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         grad_checkpointing: bool = False,
         label_smoothing: float = 0.0,
+        skip_nan: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -29,6 +30,7 @@ class TimmClassifier(VisiomelClassifier):
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
             label_smoothing=label_smoothing,
+            skip_nan=skip_nan,
         )
         self.save_hyperparameters()
 
@@ -44,8 +46,11 @@ class TimmClassifier(VisiomelClassifier):
     
     def compute_loss_preds(self, batch, *args, **kwargs):
         self.check_batch_dims(batch)
-        
+
         x, y = batch
-        preds = self(x)
-        loss = self.loss_fn(preds, y)
-        return loss, {'ce': loss}, preds
+        out = self(x)
+
+        y_no_nan, out_no_nan = self.remove_nans(y, out)
+        loss = self.loss_fn(out_no_nan, y_no_nan)
+
+        return loss, {'ce': loss}, out

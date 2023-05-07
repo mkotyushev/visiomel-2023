@@ -30,6 +30,7 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
         grad_checkpointing: bool = False,
         drloc_params: Optional[Dict[str, Any]] = None,
         label_smoothing: float = 0.0,
+        skip_nan: bool = False,
     ):
         super().__init__(
             optimizer_init=optimizer_init, 
@@ -39,6 +40,7 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
             label_smoothing=label_smoothing,
+            skip_nan=skip_nan,
         )
         self.save_hyperparameters()
 
@@ -79,12 +81,14 @@ class SwinTransformerV2Classifier(VisiomelClassifier):
         
         x, y = batch
         out = self(x)
+
+        y_no_nan, out_no_nan = self.remove_nans(y, out)
         
         if self.hparams.drloc_params is None:
-            loss = self.loss_fn(out, y)
+            loss = self.loss_fn(out_no_nan, y_no_nan)
             return loss, {'ce': loss}, out
         else:
-            loss_sup = self.loss_fn(out.sup, y)
+            loss_sup = self.loss_fn(out_no_nan.sup, y_no_nan)
             loss_ssup, ssup_items = self.criterion_ssup(
                 out, 
                 self.hparams.drloc_params['drloc_mode'], 
