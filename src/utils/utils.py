@@ -248,7 +248,9 @@ class LogLossScore(Metric):
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         preds, target = self._input_format(preds, target)
-        assert preds.shape[0] == target.shape[0]
+        assert preds.shape[0] == target.shape[0], \
+            f'preds and target must have same first dimension, ' \
+            f'got {preds.shape[0]} and {target.shape[0]}'
 
         self.preds.append(preds)
         self.target.append(target)
