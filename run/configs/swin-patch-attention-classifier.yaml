@@ -135,3 +135,4 @@ data:
     prefetch_factor: 2
     pin_memory: false
     sampler: weighted_upsampling
+    val_dataset_downsampled_k: 30
