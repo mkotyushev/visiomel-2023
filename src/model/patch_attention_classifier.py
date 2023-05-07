@@ -341,6 +341,9 @@ class PatchAttentionClassifier(VisiomelClassifier):
     
     def update_metrics(self, span, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[3].detach(), preds[:, 1].detach().float()
+        if len(batch) == 4:  # no meta: x, mask, y, path
+            y, y_pred = batch[2].detach(), preds[:, 1].detach().float()
+        elif len(batch) == 5:  # with meta: x, mask, meta, y, path
+            y, y_pred = batch[3].detach(), preds[:, 1].detach().float()
         self.cat_metrics[span]['preds'].update(y_pred)
         self.cat_metrics[span]['targets'].update(y)
