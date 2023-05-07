@@ -9,7 +9,7 @@ from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import KFold, StratifiedGroupKFold
 from torch.utils.data._utils.collate import default_collate
 
-from .visiomel_datamodule import build_downsampled_dataset, build_weighted_sampler
+from .visiomel_datamodule import build_weighted_sampler
 from .datasets import EmbeddingDataset, SubsetDataset
 
 logger = logging.getLogger(__name__)
@@ -129,15 +129,17 @@ def masked_collate_fn(batch):
     # Pad & pack sequences with different lengths to max length
     # across the batch, create bool mask for padded values
 
-    X = [torch.from_numpy(x) for x, _, _ in batch]
-    y = default_collate([y_ for _, y_, _ in batch])
-    paths = [path for _, _, path in batch]
+    X = [torch.from_numpy(x) for x, _, _, _ in batch]
+    meta = default_collate([torch.from_numpy(meta_).long() for _, meta_, _, _ in batch])
+    y = default_collate([y_ for _, _, y_, _ in batch])
+    paths = [path for _, _, _, path in batch]
 
     lengths = torch.tensor([len(x) for x in X])
     mask = ~torch.nn.utils.rnn.pad_sequence([torch.ones(l) for l in lengths], batch_first=True).bool()
     X = torch.nn.utils.rnn.pad_sequence(X, batch_first=True)
 
-    return X, mask, y, paths
+    # x, mask, meta, y, cache_key = batch
+    return X, mask, meta, y, paths
 
 
 def check_no_split_intersection(
@@ -172,7 +174,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
         num_workers_saturated: int = 0,
-        val_dataset_downsampled_k: int = 30,
+        meta_filepath: Optional[str] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -191,8 +193,14 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         """Setup data."""
         if self.train_dataset is None:
             if self.hparams.k is not None:
-                dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
-                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
+                dataset_no_repeats = EmbeddingDataset(
+                    self.hparams.embedding_pathes,
+                    meta_filepath=self.hparams.meta_filepath
+                )
+                dataset_with_repeats = EmbeddingDataset(
+                    self.hparams.embedding_pathes_aug_with_repeats,
+                    meta_filepath=self.hparams.meta_filepath
+                )
 
                 # Test and val should be without repeats
                 # train should be with repeats
@@ -233,14 +241,11 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 # Check that train and val datasets do not intersect
                 # in terms of filenames
                 check_no_split_intersection(self.train_dataset, self.val_dataset, self.test_dataset)
-                self.val_dataset_downsampled = build_downsampled_datasets(
-                    self.val_dataset, 
-                    k=self.hparams.val_dataset_downsampled_k, 
-                    random_state=self.hparams.split_seed,
-                    method='bootstrap',
-                )
             else:
-                self.train_dataset = EmbeddingDataset(self.hparams.embedding_pathes)
+                self.train_dataset = EmbeddingDataset(
+                    self.hparams.embedding_pathes, 
+                    meta_filepath=self.hparams.meta_filepath
+                )
                 self.val_dataset = None
 
     def train_dataloader(self) -> DataLoader:
@@ -271,21 +276,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             shuffle=False,
             collate_fn=self.collate_fn,
         )
-
-        val_dataloaders_downsampled = []
-        for dataset in self.val_dataset_downsampled:
-            dataloader = DataLoader(
-                dataset=dataset, 
-                batch_size=self.hparams.batch_size, 
-                num_workers=self.hparams.num_workers,
-                pin_memory=self.hparams.pin_memory,
-                prefetch_factor=self.hparams.prefetch_factor,
-                persistent_workers=self.hparams.persistent_workers,
-                shuffle=False,
-                collate_fn=self.collate_fn,
-            )
-            val_dataloaders_downsampled.append(dataloader)
-        return [val_dataloader, *val_dataloaders_downsampled]
+        return val_dataloader
 
     def test_dataloader(self) -> DataLoader:
         return DataLoader(

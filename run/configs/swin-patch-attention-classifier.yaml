@@ -106,6 +106,7 @@ model:
         - classifier
     label_smoothing: 0.1
     lr: 1e-3
+    n_bootstrap: 500
 data:
   class_path: src.data.visiomel_datamodule_emb.VisiomelDatamoduleEmb
   init_args:
@@ -135,4 +136,3 @@ data:
     prefetch_factor: 2
     pin_memory: false
     sampler: weighted_upsampling
-    val_dataset_downsampled_k: 30
