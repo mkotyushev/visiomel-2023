@@ -173,6 +173,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         sampler: Optional[str] = None,
         num_workers_saturated: int = 0,
         val_dataset_downsampled_k: int = 30,
+        meta_filepath: Optional[str] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -191,8 +192,14 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         """Setup data."""
         if self.train_dataset is None:
             if self.hparams.k is not None:
-                dataset_no_repeats = EmbeddingDataset(self.hparams.embedding_pathes)
-                dataset_with_repeats = EmbeddingDataset(self.hparams.embedding_pathes_aug_with_repeats)
+                dataset_no_repeats = EmbeddingDataset(
+                    self.hparams.embedding_pathes,
+                    meta_filepath=self.hparams.meta_filepath
+                )
+                dataset_with_repeats = EmbeddingDataset(
+                    self.hparams.embedding_pathes_aug_with_repeats,
+                    meta_filepath=self.hparams.meta_filepath
+                )
 
                 # Test and val should be without repeats
                 # train should be with repeats
@@ -240,7 +247,10 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                     method='bootstrap',
                 )
             else:
-                self.train_dataset = EmbeddingDataset(self.hparams.embedding_pathes)
+                self.train_dataset = EmbeddingDataset(
+                    self.hparams.embedding_pathes, 
+                    meta_filepath=self.hparams.meta_filepath
+                )
                 self.val_dataset = None
 
     def train_dataloader(self) -> DataLoader:
