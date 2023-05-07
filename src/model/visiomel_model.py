@@ -342,13 +342,15 @@ class VisiomelModel(LightningModule):
         if self.hparams.log_norm_verbose:
             self.log_dict(norms)
         else:
-            self.log('grad_2.0_norm_total', norms['grad_2.0_norm_total'])
+            if 'grad_2.0_norm_total' in norms:
+                self.log('grad_2.0_norm_total', norms['grad_2.0_norm_total'])
 
         norms = state_norm(self, norm_type=2)
         if self.hparams.log_norm_verbose:
             self.log_dict(norms)
         else:
-            self.log('state_2.0_norm_total', norms['state_2.0_norm_total'])
+            if 'state_2.0_norm_total' in norms:
+                self.log('state_2.0_norm_total', norms['state_2.0_norm_total'])
 
 
 class VisiomelClassifier(VisiomelModel):
