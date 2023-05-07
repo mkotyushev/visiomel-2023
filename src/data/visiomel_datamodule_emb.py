@@ -185,6 +185,9 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         meta_filepath: Optional[str] = None,
     ):
         super().__init__()
+        if meta_filepath == 'none':
+            meta_filepath = None
+
         self.save_hyperparameters()
 
         # num_splits = 10 means our dataset will be split to 10 parts

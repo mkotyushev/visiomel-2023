@@ -42,6 +42,11 @@ parameters:
     - 64
     - 128
     - 256
+  data.init_args.meta_filepath:
+    distribution: categorical
+    values:
+    - /workspace/data/train_metadata_pPa7YD3.csv
+    - none
   data.init_args.sampler:
     distribution: categorical
     values:
