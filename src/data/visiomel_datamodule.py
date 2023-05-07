@@ -168,7 +168,6 @@ class VisiomelDatamodule(LightningDataModule):
         mask_ratio: float = 0.6,
         train_transform_n_repeats: Optional[int] = None,
         val_repeats_aug: bool = False,
-        val_dataset_downsampled_k: int = 1,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -332,7 +331,6 @@ class VisiomelDatamodule(LightningDataModule):
                 self.train_dataset, self.val_dataset = \
                     SubsetDataset(train_subset, transform=self.train_transform, n_repeats=train_n_repeats), \
                     SubsetDataset(val_subset, transform=self.val_transform, n_repeats=val_n_repeats)
-                self.val_dataset_downsampled = [build_downsampled_dataset(self.val_dataset)]
             else:
                 dataset = VisiomelImageFolder(
                     self.hparams.data_dir_train, 
@@ -390,21 +388,7 @@ class VisiomelDatamodule(LightningDataModule):
             shuffle=False
         )
         
-        val_dataloaders_downsampled = []
-        for dataset in self.val_dataset_downsampled:
-            dataloader = DataLoader(
-                dataset=dataset, 
-                batch_size=self.hparams.batch_size, 
-                num_workers=self.hparams.num_workers,
-                pin_memory=self.hparams.pin_memory,
-                prefetch_factor=self.hparams.prefetch_factor,
-                persistent_workers=self.hparams.persistent_workers,
-                collate_fn=self.collate_fn,
-                shuffle=False
-            )
-            val_dataloaders_downsampled.append(dataloader)
-        
-        return [val_dataloader, *val_dataloaders_downsampled]
+        return val_dataloader
 
     def test_dataloader(self) -> DataLoader:
         assert self.test_dataset is not None, "test dataset is not defined"

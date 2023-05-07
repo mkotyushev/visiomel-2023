@@ -9,7 +9,7 @@ from pytorch_lightning import LightningDataModule
 from sklearn.model_selection import KFold, StratifiedGroupKFold
 from torch.utils.data._utils.collate import default_collate
 
-from .visiomel_datamodule import build_downsampled_dataset, build_weighted_sampler
+from .visiomel_datamodule import build_weighted_sampler
 from .datasets import EmbeddingDataset, SubsetDataset
 
 logger = logging.getLogger(__name__)
@@ -174,7 +174,6 @@ class VisiomelDatamoduleEmb(LightningDataModule):
         persistent_workers: bool = False,
         sampler: Optional[str] = None,
         num_workers_saturated: int = 0,
-        val_dataset_downsampled_k: int = 30,
         meta_filepath: Optional[str] = None,
     ):
         super().__init__()
@@ -242,12 +241,6 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 # Check that train and val datasets do not intersect
                 # in terms of filenames
                 check_no_split_intersection(self.train_dataset, self.val_dataset, self.test_dataset)
-                self.val_dataset_downsampled = build_downsampled_datasets(
-                    self.val_dataset, 
-                    k=self.hparams.val_dataset_downsampled_k, 
-                    random_state=self.hparams.split_seed,
-                    method='bootstrap',
-                )
             else:
                 self.train_dataset = EmbeddingDataset(
                     self.hparams.embedding_pathes, 
@@ -283,21 +276,7 @@ class VisiomelDatamoduleEmb(LightningDataModule):
             shuffle=False,
             collate_fn=self.collate_fn,
         )
-
-        val_dataloaders_downsampled = []
-        for dataset in self.val_dataset_downsampled:
-            dataloader = DataLoader(
-                dataset=dataset, 
-                batch_size=self.hparams.batch_size, 
-                num_workers=self.hparams.num_workers,
-                pin_memory=self.hparams.pin_memory,
-                prefetch_factor=self.hparams.prefetch_factor,
-                persistent_workers=self.hparams.persistent_workers,
-                shuffle=False,
-                collate_fn=self.collate_fn,
-            )
-            val_dataloaders_downsampled.append(dataloader)
-        return [val_dataloader, *val_dataloaders_downsampled]
+        return val_dataloader
 
     def test_dataloader(self) -> DataLoader:
         return DataLoader(

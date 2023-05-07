@@ -175,12 +175,8 @@ class SwinTransformerV2SimMIM(VisiomelModel):
         """Configure task-specific metrics."""
         return
 
-    def update_train_metrics(self, preds, batch):
+    def update_metrics(self, span, preds, batch):
         """Update train metrics."""
-        return
-
-    def update_val_metrics(self, preds, batch, dataloader_idx=0):
-        """Update val metrics."""
         return
 
     def forward(self, x: Tensor, mask: Tensor) -> Tensor:

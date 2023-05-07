@@ -240,6 +240,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
         lr: float = 1e-3,
         attention_num_heads: int = 2,
         attention_dropout: float = 0.2,
+        n_bootstrap: int = 1000,
     ):
         # Hack to make wandb CV work with nested dicts
         optimizer_init['init_args']['lr'] = lr
@@ -252,6 +253,7 @@ class PatchAttentionClassifier(VisiomelClassifier):
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
             label_smoothing=label_smoothing,
+            n_bootstrap=n_bootstrap,
         )
         self.save_hyperparameters()
 
@@ -337,24 +339,8 @@ class PatchAttentionClassifier(VisiomelClassifier):
         
         return x
     
-    def update_train_metrics(self, preds, batch):
+    def update_metrics(self, span, preds, batch):
         """Update train metrics."""
-        y, y_pred = batch[3].detach().cpu(), preds[:, 1].detach().cpu().float()
-        for _, metric in self.train_metrics.items():
-            metric.update(y_pred, y)
-
-    def update_val_metrics(self, preds, batch, dataloader_idx=0):
-        """Update val metrics."""
-        y, y_pred = batch[3].detach().cpu(), preds[:, 1].detach().cpu().float()
-        if dataloader_idx == 0:
-            for _, metric in self.val_metrics.items():
-                # bug in BinaryConfusionMatrix resets it to GPU
-                metric = metric.cpu()
-                metric.update(y_pred, y)
-        else:
-            self.clone_val_downsampled_metrics_if_needed()
-            for _, metrics in self.val_metrics_downsampled.items():
-                metric = metrics[dataloader_idx - 1]
-                # bug in BinaryConfusionMatrix resets it to GPU
-                metric = metric.cpu()
-                metric.update(y_pred, y)
+        y, y_pred = batch[3].detach(), preds[:, 1].detach().float()
+        self.cat_metrics[span]['preds'].update(y_pred)
+        self.cat_metrics[span]['targets'].update(y)

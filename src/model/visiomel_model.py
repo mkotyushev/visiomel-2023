@@ -1,3 +1,4 @@
+from copy import deepcopy
 import logging
 from matplotlib import pyplot as plt
 import numpy as np
@@ -8,6 +9,7 @@ from torch import Tensor
 import torch
 from torch.nn import ModuleDict, ModuleList, CrossEntropyLoss
 from pytorch_lightning.cli import instantiate_class
+from torchmetrics import CatMetric, Metric
 from torchmetrics.classification import BinaryF1Score, BinaryAUROC, BinaryStatScores
 from pytorch_lightning.utilities import grad_norm
 
@@ -26,13 +28,13 @@ class VisiomelModel(LightningModule):
         finetuning: Optional[Dict[str, Any]] = None,
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
+        n_bootstrap: int = 1000,
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        self.train_metrics = None
-        self.val_metrics = None
-        self.val_metrics_downsampled = None
+        self.metrics = None
+        self.cat_metrics = None
 
         self.configure_metrics()
 
@@ -42,11 +44,14 @@ class VisiomelModel(LightningModule):
     def configure_metrics(self):
         """Configure task-specific metrics."""
 
-    def update_train_metrics(self, preds, batch):
-        """Update train metrics."""
+    def bootstrap_metric(self, preds, targets, metric: Metric):
+        """Calculate metric on bootstrap samples."""
 
-    def update_val_metrics(self, preds, batch, dataloader_idx=0):
-        """Update val metrics."""
+    def update_metrics(self, span, preds, batch):
+        """Update train metrics."""
+        y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
+        self.cat_metrics[span]['preds'].update(y_pred)
+        self.cat_metrics[span]['targets'].update(y)
 
     def on_train_epoch_start(self) -> None:
         """Called in the training loop at the very beginning of the epoch."""
@@ -94,7 +99,7 @@ class VisiomelModel(LightningModule):
                 on_epoch=True,
                 prog_bar=True,
             )
-        self.update_train_metrics(preds, batch)
+        self.update_metrics('train_metrics', preds, batch)
 
         # Handle nan in loss
         has_nan = False
@@ -118,86 +123,124 @@ class VisiomelModel(LightningModule):
     
     def validation_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None, **kwargs) -> Tensor:
         total_loss, losses, preds = self.compute_loss_preds(batch, **kwargs)
-        val_dataloader_name = 'val' 
-        if dataloader_idx is not None and dataloader_idx > 0:
-            val_dataloader_name = 'val_ds'
+        assert dataloader_idx is None or dataloader_idx == 0, 'Only one val dataloader is supported.'
         for loss_name, loss in losses.items():
             self.log(
-                f'{val_dataloader_name}_loss_{loss_name}', 
+                f'val_loss_{loss_name}', 
                 loss,
                 on_step=False,
                 on_epoch=True,
                 prog_bar=True,
-                add_dataloader_idx=True
+                add_dataloader_idx=False
             )
-        self.update_val_metrics(preds, batch, dataloader_idx)
+        self.update_metrics('val_metrics', preds, batch)
         return total_loss
 
     def predict_step(self, batch: Tensor, batch_idx: int, dataloader_idx: Optional[int] = None, **kwargs) -> Tensor:
         _, _, preds = self.compute_loss_preds(batch, **kwargs)
         return preds
 
-    def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
-        self.log(
-            name,
-            metric.compute(),
-            on_step=on_step,
-            on_epoch=on_epoch,
-            prog_bar=prog_bar,
-        )
-        metric.reset()
-    
-    def log_metric_and_reset_agg(self, name, metrics, on_step=False, on_epoch=True, prog_bar=True):
-        values = []
-        for metric in metrics:
-            values.append(metric.compute())
-            metric.reset()
-        mean = sum(values) / len(values)
-        self.log(
-            name,
-            mean,
-            on_step=on_step,
-            on_epoch=on_epoch,
-            prog_bar=prog_bar,
-        )
+    def log_metrics_and_reset(
+        self, 
+        prefix, 
+        on_step=False, 
+        on_epoch=True, 
+        prog_bar_names=None,
+        reset=True,
+    ):
+        # Get metric span: train or val
+        span = None
+        if prefix == 'train':
+            span = 'train_metrics'
+        elif prefix in ['val', 'val_ds']:
+            span = 'val_metrics'
+        
+        # Get concatenated preds and targets
+        # and reset them
+        preds, targets = \
+            self.cat_metrics[span]['preds'].compute().cpu(),  \
+            self.cat_metrics[span]['targets'].compute().cpu()
+        if reset:
+            self.cat_metrics[span]['preds'].reset()
+            self.cat_metrics[span]['targets'].reset()
+
+        # Calculate and log metrics
+        for name, metric in self.metrics.items():
+            metric_value = None
+            if prefix == 'val_ds':  # bootstrap
+                if self.hparams.n_bootstrap > 0:
+                    metric_value = self.bootstrap_metric(preds, targets, metric)
+                else:
+                    logger.warning(
+                        f'prefix == val_ds but n_bootstrap == 0. '
+                        f'No bootstrap metrics will be calculated '
+                        f'and logged.'
+                    )
+            else:
+                metric.update(preds, targets)
+                metric_value = metric.compute()
+                metric.reset()
+            
+            prog_bar = False
+            if prog_bar_names is not None:
+                prog_bar = (name in prog_bar_names)
+
+            if metric_value is not None:
+                if type(metric) == BinaryStatScores:
+                    metric_value = metric_value.cpu().float()
+                    for key, value in zip(['tp', 'fp', 'tn', 'fn', 'sup'], metric_value):
+                        self.log(
+                            f'{prefix}_{name}_{key}',
+                            value,
+                            on_step=on_step,
+                            on_epoch=on_epoch,
+                            prog_bar=prog_bar,
+                        )
+                else:
+                    self.log(
+                        f'{prefix}_{name}',
+                        metric_value,
+                        on_step=on_step,
+                        on_epoch=on_epoch,
+                        prog_bar=prog_bar,
+                    )
 
     def on_train_epoch_end(self) -> None:
         """Called in the training loop at the very end of the epoch."""
-        if self.train_metrics is None:
+        if self.metrics is None:
             return
-        for name, metric in self.train_metrics.items():
-            prog_bar = (name == 'f1' or name == 'ce')
-            self.log_metric_and_reset(
-                f'train_{name}',
-                metric,
-                on_step=False,
-                on_epoch=True,
-                prog_bar=prog_bar,
-            )
+        assert self.cat_metrics is not None
+
+        prog_bar_names = ['f1', 'ce']
+        self.log_metrics_and_reset(
+            'train',
+            on_step=False,
+            on_epoch=True,
+            prog_bar_names=prog_bar_names,
+            reset=True,
+        )
     
     def on_validation_epoch_end(self) -> None:
         """Called in the validation loop at the very end of the epoch."""
-        if self.val_metrics is not None:
-            for name, metric in self.val_metrics.items():
-                prog_bar = (name == 'f1')
-                self.log_metric_and_reset(
-                    f'val_{name}',
-                    metric,
-                    on_step=False,
-                    on_epoch=True,
-                    prog_bar=prog_bar,
-                )
-        
-        if self.val_metrics_downsampled is not None:
-            prog_bar = (name == 'ds_ce')
-            for name, metrics in self.val_metrics_downsampled.items():
-                self.log_metric_and_reset_agg(
-                    f'val_{name}',
-                    metrics,
-                    on_step=False,
-                    on_epoch=True,
-                    prog_bar=prog_bar,
-                )
+        if self.metrics is None:
+            return
+        assert self.cat_metrics is not None
+
+        prog_bar_names = ['f1']
+        self.log_metrics_and_reset(
+            'val',
+            on_step=False,
+            on_epoch=True,
+            prog_bar_names=prog_bar_names,
+            reset=False,
+        )
+        self.log_metrics_and_reset(
+            'val_ds',
+            on_step=False,
+            on_epoch=True,
+            prog_bar_names=prog_bar_names,
+            reset=True,
+        )
 
     def get_lr_decayed(self, lr, layer_index, layer_name):
         """
@@ -318,6 +361,7 @@ class VisiomelClassifier(VisiomelModel):
         log_norm_verbose: bool = False,
         lr_layer_decay: Union[float, Dict[str, float]] = 1.0,
         label_smoothing: float = 0.0,
+        n_bootstrap: int = 1000,
     ):
         super().__init__(
             optimizer_init=optimizer_init,
@@ -326,117 +370,60 @@ class VisiomelClassifier(VisiomelModel):
             finetuning=finetuning,
             log_norm_verbose=log_norm_verbose,
             lr_layer_decay=lr_layer_decay,
+            n_bootstrap=n_bootstrap,
         )
         self.save_hyperparameters()
         self.loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
 
-    def log_metric_and_reset(self, name, metric, on_step=False, on_epoch=True, prog_bar=True):
-        if type(metric) is BinaryStatScores:  # no isinstance because other classes inherit from it
-            scores = metric.compute()
-            for k, v in zip(['tp', 'fp', 'tn', 'fn', 'sup'], scores):
-                self.log(
-                    f'{name}_{k}',
-                    v.float(),
-                    on_step=on_step,
-                    on_epoch=on_epoch,
-                    prog_bar=prog_bar,
-                )
-        else:
-            self.log(
-                name,
-                metric.compute(),
-                on_step=on_step,
-                on_epoch=on_epoch,
-                prog_bar=prog_bar,
-            )
-        metric.reset()
+    def bootstrap_metric(self, preds, targets, metric: Metric):
+        """Calculate metric on bootstrap samples."""
+        assert self.hparams.num_classes == 2, 'Only binary classification is supported.'
 
-    def log_metric_and_reset_agg(self, name, metrics, on_step=False, on_epoch=True, prog_bar=True):
-        if type(metrics[0]) is BinaryStatScores:  # no isinstance because other classes inherit from it
-            values = []
-            for metric in metrics:
-                values.append(metric.compute())
-                metric.reset()
-            scores = np.stack(values, axis=0).astype(np.float32).mean(axis=0)
-            for k, v in zip(['tp', 'fp', 'tn', 'fn', 'sup'], scores):
-                self.log(
-                    f'{name}_{k}',
-                    v,
-                    on_step=on_step,
-                    on_epoch=on_epoch,
-                    prog_bar=prog_bar,
-                )
-        else:
-            values = []
-            for metric in metrics:
-                values.append(metric.compute())
-                metric.reset()
-            mean = sum(values) / len(values)
-            self.log(
-                name,
-                mean,
-                on_step=on_step,
-                on_epoch=on_epoch,
-                prog_bar=prog_bar,
+        neg_indices = torch.arange(targets.shape[0])[targets == 0]
+        pos_indices = torch.arange(targets.shape[0])[targets == 1]
+        
+        # TODO: try to code vectorized version
+        metric_values = []
+        for _ in range(self.hparams.n_bootstrap):
+            neg_indices_sample = neg_indices[torch.randperm(neg_indices.shape[0])[:pos_indices.shape[0]]]
+            indices = torch.cat([neg_indices_sample, pos_indices])
+            metric.update(preds[indices], targets[indices])
+            metric_values.append(
+                metric.compute()
             )
+            metric.reset()
+        
+        if isinstance(metric_values[0], Tensor) and metric_values[0].ndim > 0:  # ndim tensors
+            return torch.stack(metric_values, dim=0).float().mean(dim=0)
+        elif isinstance(metric_values[0], Tensor) and metric_values[0].ndim == 0:  # scalars tensors
+            return torch.tensor(metric_values).float().mean(dim=0)
+        else:  # scalar floats / ints / numpy arrays
+            return torch.from_numpy(np.array(metric_values)).float().mean(dim=0)
 
     def configure_metrics(self):
         """Configure task-specific metrics."""
-        self.train_metrics = ModuleDict(
+        self.metrics = ModuleDict(
             {
-                'll': LogLossScore().cpu(),
-                'auc': BinaryAUROC().cpu(),
-                'f1': BinaryF1Score().cpu(),
-                'bss': BinaryStatScores().cpu(),
-                'pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0).cpu(),
+                'll': LogLossScore(),
+                'auc': BinaryAUROC(),
+                'f1': BinaryF1Score(),
+                'bss': BinaryStatScores(),
+                'pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0),
             }
         )
-        self.val_metrics = ModuleDict(
+        self.cat_metrics = ModuleDict(
             {
-                'll': LogLossScore().cpu(),
-                'auc': BinaryAUROC().cpu(),
-                'f1': BinaryF1Score().cpu(),
-                'bss': BinaryStatScores().cpu(),
-                'pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0).cpu(),
+                'train_metrics': ModuleDict(
+                    {
+                        'preds': CatMetric(),
+                        'targets': CatMetric()
+                    }
+                ),
+                'val_metrics': ModuleDict(
+                    {
+                        'preds': CatMetric(),
+                        'targets': CatMetric()
+                    }
+                ),
             }
         )
-        self.val_metrics_downsampled = ModuleDict(
-            {
-                'ds_ll': LogLossScore().cpu(),
-                'ds_auc': BinaryAUROC().cpu(),
-                'ds_f1': BinaryF1Score().cpu(),
-                'ds_bss': BinaryStatScores().cpu(),
-                'ds_pf1s': PenalizedBinaryFBetaScore(mode='soft', beta=1.0).cpu(),
-            }
-        )
-
-    def update_train_metrics(self, preds, batch):
-        """Update train metrics."""
-        y, y_pred = batch[1].detach().cpu(), preds[:, 1].detach().cpu().float()
-        for _, metric in self.train_metrics.items():
-            metric.update(y_pred, y)
-
-    def clone_val_downsampled_metrics_if_needed(self):
-        # Clone metrics for each downsampled dataset
-        # if have not been cloned yet 
-        # (i. e. if self.val_metrics_downsampled[name] is not list)
-        for name in self.val_metrics_downsampled:
-            if not isinstance(self.val_metrics_downsampled[name], ModuleList):
-                self.val_metrics_downsampled[name] = ModuleList(
-                    [
-                        self.val_metrics_downsampled[name].clone() 
-                        for _ in range(len(self.trainer.datamodule.val_dataset_downsampled))
-                    ]
-                )
-
-    def update_val_metrics(self, preds, batch, dataloader_idx=0):
-        """Update val metrics."""
-        y, y_pred = batch[1].detach().cpu(), preds[:, 1].detach().cpu().float()
-        if dataloader_idx == 0:
-            for _, metric in self.val_metrics.items():
-                metric.update(y_pred, y)
-        else:
-            self.clone_val_downsampled_metrics_if_needed()
-            for _, metrics in self.val_metrics_downsampled.items():
-                metric = metrics[dataloader_idx - 1]
-                metric.update(y_pred, y)
