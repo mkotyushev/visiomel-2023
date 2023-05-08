@@ -12,7 +12,7 @@ trainer:
     - class_path: pytorch_lightning.callbacks.EarlyStopping
       init_args:
         monitor: val_ds_ll
-        patience: 50
+        patience: 30
         mode: min
 
     # Only for tracking best metrics
