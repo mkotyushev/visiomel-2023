@@ -20,11 +20,6 @@ trainer:
         mode: max
         save_on_train_epoch_end: false
         save_last: true
-    - class_path: pytorch_lightning.callbacks.EarlyStopping
-      init_args:
-        monitor: val_pf1s
-        patience: 30
-        mode: max
 
   # limit_train_batches: 10
   # limit_val_batches: 10
