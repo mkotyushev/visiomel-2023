@@ -8,7 +8,13 @@ trainer:
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
       init_args:
         logging_interval: step
-    
+
+    - class_path: pytorch_lightning.callbacks.EarlyStopping
+      init_args:
+        monitor: val_ds_ll
+        patience: 50
+        mode: min
+
     # Only for tracking best metrics
     # val
     - class_path: src.utils.utils.ModelCheckpointNoSave
