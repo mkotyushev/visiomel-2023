@@ -15,14 +15,14 @@ trainer:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
         save_top_k: 1
-        monitor: val_ds_pf1s
+        monitor: val_pf1s
         every_n_epochs: 1
         mode: min
         save_on_train_epoch_end: false
         save_last: true
     - class_path: pytorch_lightning.callbacks.EarlyStopping
       init_args:
-        monitor: val_ds_pf1s
+        monitor: val_pf1s
         patience: 30
         mode: min
 
