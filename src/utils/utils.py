@@ -688,7 +688,7 @@ class SavePredictionsCallback(Callback):
         batch_idx: int,
         dataloader_idx: int = 0,
     ):
-        self.filenames.extend([path.split('/')[-1] for path in batch[4]])
+        self.filenames.extend([path.split('/')[-1] for path in batch[3]])
         self.predictions.append(outputs)
 
     def on_predict_epoch_end(
