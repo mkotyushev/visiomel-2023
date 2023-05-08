@@ -1,4 +1,4 @@
-# young-sweep-1, best by ds-ll: 
+# nams2gt2, young-sweep-1, best by ds-ll: 
 # /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=128 --data.init_args.meta_filepath=/workspace/data/train_metadata_pPa7YD3.csv --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.1813353404513854 --model.init_args.attention_hidden_dim=256 --model.init_args.attention_num_heads=8 --model.init_args.label_smoothing=0.04847752374376822 --model.lr=0.0004155916906118813 --trainer.max_epochs=200
 # https://wandb.ai/mkotyushev_/visiomel/runs/mtn2un6s
 program: run/main_cv.py

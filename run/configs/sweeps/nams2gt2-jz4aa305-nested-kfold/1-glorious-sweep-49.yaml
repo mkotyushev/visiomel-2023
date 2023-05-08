@@ -1,4 +1,4 @@
-# glorious-sweep-49, best by ll: 
+# nams2gt2, glorious-sweep-49, best by ll (replaced by 2-fluent-sweep-47.yaml)): 
 # /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=64 --data.init_args.meta_filepath=/workspace/data/train_metadata_pPa7YD3.csv --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.12712721004246266 --model.init_args.attention_hidden_dim=256 --model.init_args.attention_num_heads=8 --model.init_args.label_smoothing=0.08068955209080565 --model.lr=0.0015068095358384765 --trainer.max_epochs=200
 # https://wandb.ai/mkotyushev_/visiomel/runs/qw2nix5m/overview?workspace=
 program: run/main_cv.py
