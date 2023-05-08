@@ -1,0 +1,62 @@
+# glorious-sweep-49, best by ll: 
+# /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=64 --data.init_args.meta_filepath=/workspace/data/train_metadata_pPa7YD3.csv --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.12712721004246266 --model.init_args.attention_hidden_dim=256 --model.init_args.attention_num_heads=8 --model.init_args.label_smoothing=0.08068955209080565 --model.lr=0.0015068095358384765 --trainer.max_epochs=200
+# https://wandb.ai/mkotyushev_/visiomel/runs/qw2nix5m/overview?workspace=
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/sweeps/nams2gt2-nested-kfold/swin-patch-attention-classifier-val-ll.yaml
+  - ${args}
+method: grid
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 200
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 256
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 8
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 64
+  data.init_args.meta_filepath:
+    distribution: categorical
+    values:
+    - /workspace/data/train_metadata_pPa7YD3.csv
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.12712721004246266
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.0015068095358384765
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.08068955209080565
+  data.init_args.k_test:
+    distribution: categorical
+    values:
+    - 5
+  data.init_args.fold_index_test:
+    distribution: categorical
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
