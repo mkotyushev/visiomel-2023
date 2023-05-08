@@ -5,12 +5,9 @@ command:
   - ${program}
   - fit
   - --config
-  - run/configs/sweeps/swin-patch-attention-classifier-ds-ll.yaml
+  - run/configs/sweeps/swin-patch-attention-classifier.yaml
   - ${args}
-method: bayes
-metric:
-  goal: minimize
-  name: mean_best_val_ds_ll
+method: random
 parameters:
   trainer.max_epochs:
     distribution: categorical
@@ -41,14 +38,14 @@ parameters:
     values:
     - weighted_upsampling
   model.init_args.attention_dropout:
-    distribution: categorical
-    values:
-    - 0.17
+    distribution: uniform
+    max: 0.2
+    min: 0.1
   model.lr:
     distribution: log_uniform_values
-    max: 0.01
+    max: 3e-3
     min: 0.0001
   model.init_args.label_smoothing:
-    distribution: categorical
-    values:
-    - 0.05
+    distribution: uniform
+    max: 0.15
+    min: 0.0
