@@ -1,6 +1,6 @@
 # 1. get checkpoint root dir: args.checkpoint_root_dir
 # 2. get config path: args.config_path
-# usage: python evaluate_nested_cv_pac.py --checkpoint_root_dir ./visiomel --logs_dir ./wandb --nested --save_path ./cv_results.pkl
+# usage: python src/scripts/evaluate_nested_cv_pac.py --checkpoint_root_dir ./visiomel --logs_dir ./wandb --nested --save_path ./visiomel/cv_results.pkl
 
 import argparse
 from collections import defaultdict
@@ -194,7 +194,7 @@ def main():
                 torch.concat(
                     cli.trainer.predict(
                         model=cli.model,
-                        dataloaders=cli.datamodule.val_dataloader()[0],  # only not downsampled
+                        dataloaders=cli.datamodule.val_dataloader(),
                         return_predictions=True,
                         ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
                     ), 
