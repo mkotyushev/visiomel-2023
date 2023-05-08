@@ -5,7 +5,7 @@ command:
   - ${program}
   - fit
   - --config
-  - run/configs/swin-patch-attention-classifier-val-ds-ll.yaml
+  - run/configs/sweeps/swin-patch-attention-classifier.yaml
   - ${args}
 method: bayes
 metric:
