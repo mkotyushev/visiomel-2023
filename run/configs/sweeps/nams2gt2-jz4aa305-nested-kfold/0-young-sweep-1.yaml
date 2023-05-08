@@ -8,7 +8,7 @@ command:
   - ${program}
   - fit
   - --config
-  - run/configs/sweeps/nams2gt2-nested-kfold/swin-patch-attention-classifier-val-ds-ll.yaml
+  - run/configs/sweeps/nams2gt2-jz4aa305-nested-kfold/swin-patch-attention-classifier-val-ds-ll.yaml
   - ${args}
 method: grid
 parameters:
