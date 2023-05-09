@@ -228,7 +228,7 @@ class VisiomelModel(LightningModule):
                     for key, value in zip(['tp', 'fp', 'tn', 'fn', 'sup'], metric_value):
                         self.log(
                             f'{prefix}_{name}_{key}',
-                            value,
+                            value.float(),
                             on_step=on_step,
                             on_epoch=on_epoch,
                             prog_bar=prog_bar,
