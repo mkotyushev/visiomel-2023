@@ -73,8 +73,14 @@ def train(sweep_q, worker_q):
                     continue
                 if not isinstance(cb_best, ModelCheckpointNoSave):
                     continue
-                scores[f'{cb_best.monitor}_cross_{cb.monitor}'] = \
-                    cb.ith_epoch_score(best_epoch).item()
+
+                metric_value = cb.ith_epoch_score(best_epoch)
+
+                if metric_value is not None:
+                    scores[f'{cb_best.monitor}_cross_{cb.monitor}'] = \
+                        metric_value.item()
+                else:
+                    scores[f'{cb_best.monitor}_cross_{cb.monitor}'] = None
     except Exception as e:
         print(e)
 
