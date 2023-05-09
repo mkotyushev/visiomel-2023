@@ -181,6 +181,7 @@ def main():
     }
 
     sweep_run.log(scores_mean)
+    signal.alarm(60)  # 60 seconds to finish up
     wandb.join()
 
     print("*" * 40)
