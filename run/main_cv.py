@@ -5,7 +5,7 @@ import os
 import sys
 import wandb
 
-from src.utils.utils import MyLightningCLI, TrainerWandb
+from src.utils.utils import ModelCheckpointNoSave, MyLightningCLI, TrainerWandb
 
 
 # Set up logging
@@ -58,8 +58,23 @@ def train(sweep_q, worker_q):
                 args=args,
                 run=True,
             )
+
+        # Best scores
         for cb in cli.trainer.checkpoint_callbacks:
             scores[cb.monitor] = cb.best_model_score.item()
+
+        # Cross scores
+        for cb_best in cli.trainer.checkpoint_callbacks:
+            if not isinstance(cb_best, ModelCheckpointNoSave):
+                continue
+            best_epoch: int = cb_best.best_epoch
+            for cb in cli.trainer.checkpoint_callbacks:
+                if cb is cb_best:
+                    continue
+                if not isinstance(cb_best, ModelCheckpointNoSave):
+                    continue
+                scores[f'{cb_best.monitor}_cross_{cb.monitor}'] = \
+                    cb.ith_epoch_score(best_epoch).item()
     except Exception as e:
         print(e)
 
