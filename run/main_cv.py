@@ -2,6 +2,7 @@ import collections
 import logging
 import multiprocessing
 import os
+import signal
 import sys
 import wandb
 
@@ -159,10 +160,7 @@ def main():
         # get metric from worker
         result = sweep_q.get()
         # wait for worker to finish
-        worker.process.join(TIMEOUT_S)
-        if worker.process.is_alive():
-            worker.process.kill()
-            worker.process.join()
+        worker.process.join()
         # collect metric to dict & log metric to sweep_run
         for name, value in result.scores.items():
             scores[name][result.fold_index] = value
@@ -191,5 +189,18 @@ def main():
     print("*" * 40)
 
 
+# https://stackoverflow.com/questions/492519/timeout-on-a-function-call
+# Register an handler for the timeout
+def handler(signum, frame):
+    print("Forever is over!")
+    raise Exception("end of time")
+
+
 if __name__ == "__main__":
-    main()
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(TIMEOUT_S)
+    try:
+        main()
+    except Exception as e: 
+        print(e)
+    signal.alarm(0)
