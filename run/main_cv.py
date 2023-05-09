@@ -169,7 +169,12 @@ def main():
             )
 
     # Log mean of metrics
-    scores_mean = {f'mean_best_{name}': sum(fold_index_to_score.values()) / len(fold_index_to_score) for name, fold_index_to_score in scores.items()}
+    scores_mean = {
+        f'mean_best_{name}': 
+            sum(value for value in fold_index_to_score.values() if value is not None) / \
+            sum(1 for value in fold_index_to_score.values() if value is not None) 
+        for name, fold_index_to_score in scores.items()
+    }
 
     sweep_run.log(scores_mean)
     wandb.join()
