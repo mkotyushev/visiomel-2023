@@ -19,7 +19,7 @@ trainer:
     # val
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_ll
         every_n_epochs: 1
         mode: min
@@ -27,7 +27,7 @@ trainer:
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_auc
         every_n_epochs: 1
         mode: max
@@ -35,7 +35,7 @@ trainer:
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_f1
         every_n_epochs: 1
         mode: max
@@ -45,7 +45,7 @@ trainer:
     # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_pf1s
         every_n_epochs: 1
         mode: max
@@ -55,7 +55,7 @@ trainer:
     # val downsampled
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_ds_ll
         every_n_epochs: 1
         mode: min
@@ -63,7 +63,7 @@ trainer:
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_ds_auc
         every_n_epochs: 1
         mode: max
@@ -71,7 +71,7 @@ trainer:
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_ds_f1
         every_n_epochs: 1
         mode: max
@@ -79,7 +79,7 @@ trainer:
         save_last: false
     - class_path: src.utils.utils.ModelCheckpointNoSave
       init_args:
-        save_top_k: 1
+        save_top_k: 9999
         monitor: val_ds_pf1s
         every_n_epochs: 1
         mode: max
