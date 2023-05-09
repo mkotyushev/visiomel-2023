@@ -1,0 +1,62 @@
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/sweeps/swin-patch-attention-classifier-ds-ll.yaml
+  - ${args}
+method: random
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 30
+    - 100
+    - 200
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 32
+    - 64
+    - 128
+    - 256
+    - 512
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 1
+    - 2
+    - 4
+    - 8
+    - 16
+    - 32
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 32
+    - 64
+    - 128
+  data.init_args.meta_filepath:
+    distribution: categorical
+    values:
+    - /workspace/data/train_metadata_pPa7YD3.csv
+    - none
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+    - none
+  model.init_args.attention_dropout:
+    distribution: uniform
+    max: 0.3
+    min: 0.0
+  model.lr:
+    distribution: log_uniform_values
+    max: 0.01
+    min: 0.0001
+  model.init_args.label_smoothing:
+    distribution: uniform
+    max: 0.15
+    min: 0.0
