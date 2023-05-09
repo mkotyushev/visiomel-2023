@@ -3,7 +3,6 @@ import logging
 from matplotlib import pyplot as plt
 import numpy as np
 from pytorch_lightning import LightningModule
-from finetuning_scheduler import FinetuningScheduler
 from typing import Any, Dict, List, Optional, Union
 from torch import Tensor
 import torch
@@ -327,9 +326,6 @@ class VisiomelModel(LightningModule):
         return optimizer
 
     def fts_callback(self):
-        for c in self.trainer.callbacks:
-            if isinstance(c, FinetuningScheduler):
-                return c
         return None
 
     def configure_lr_scheduler(self, optimizer):

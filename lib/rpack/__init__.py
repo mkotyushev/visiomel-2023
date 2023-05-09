@@ -143,7 +143,7 @@ __version__ = '2.0.1'
 from typing import Iterable, Tuple, List
 
 # Extension modules
-from rpack._core import (
+from ._core import (
     pack as _pack,
     PackingImpossibleError,
     bbox_size,

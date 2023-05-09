@@ -2,7 +2,7 @@
 lightning_logs/
 wandb*/
 visiomel*/
-weights/
+weights*/
 pipe/
 *.csv
 nested-kfold-checkpoints/

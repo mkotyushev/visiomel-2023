@@ -6,7 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from munch import Munch
 from timm.models.layers import PatchEmbed
-from timm.models.swin_transformer_v2 import SwinTransformerV2
+try:
+    from timm.models.swin_transformer_v2 import SwinTransformerV2
+except ImportError as e:
+    from lib.timm_cherrypick.swin_transformer_v2 import SwinTransformerV2
 from data.transforms import generate_tensor_patches
 
 from model.quadtree_embedding import QuadtreeEmbedding

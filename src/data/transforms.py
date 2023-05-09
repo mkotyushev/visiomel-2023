@@ -1,13 +1,20 @@
 import cv2
 import math
 import numpy as np
-import rpack
+try:
+  import rpack
+except ImportError as e:
+  import lib.rpack as rpack
 import torchvision.transforms.functional as F
 from torch import Tensor
 from functools import cache
 from PIL import Image
-from histolab.filters.compositions import FiltersComposition
-from histolab.slide import Slide
+try:
+  from histolab.filters.compositions import FiltersComposition
+  from histolab.slide import Slide
+except ImportError as e:
+  from lib.histolab.filters.compositions import FiltersComposition
+  from lib.histolab.slide import Slide
 from torchvision.transforms import CenterCrop
 from typing import Optional, Tuple
 

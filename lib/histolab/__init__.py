@@ -23,4 +23,4 @@ try:
 except ImportError:
     import importlib_metadata as metadata
 
-__version__ = metadata.version("histolab")
+__version__ = 0
