@@ -8,6 +8,8 @@ import wandb
 from src.utils.utils import ModelCheckpointNoSave, MyLightningCLI, TrainerWandb
 
 
+TIMEOUT_S = 1200
+
 # Set up logging
 logging.basicConfig(
     level=logging.ERROR,
@@ -157,7 +159,10 @@ def main():
         # get metric from worker
         result = sweep_q.get()
         # wait for worker to finish
-        worker.process.join()
+        worker.process.join(TIMEOUT_S)
+        if worker.process.is_alive():
+            worker.process.kill()
+            worker.process.join()
         # collect metric to dict & log metric to sweep_run
         for name, value in result.scores.items():
             scores[name][result.fold_index] = value
