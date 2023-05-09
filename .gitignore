@@ -1,6 +1,6 @@
 **/__pycache__/
 lightning_logs/
-wandb/
+wandb*/
 visiomel*/
 weights/
 pipe/
