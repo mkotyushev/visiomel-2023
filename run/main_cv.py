@@ -9,6 +9,8 @@ import wandb
 from src.utils.utils import ModelCheckpointNoSave, MyLightningCLI, TrainerWandb
 
 
+TIMEOUT_S = 1200
+
 # Set up logging
 logging.basicConfig(
     level=logging.ERROR,
@@ -88,11 +90,14 @@ def train(sweep_q, worker_q):
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(60)  # 60 seconds to finish up
 
-    run.log(scores)
-    wandb.join()
-    sweep_q.put(WorkerDoneData(scores=scores, fold_index=worker_data.fold_index))
-    
+    try:
+        run.log(scores)
+        wandb.join()
+        sweep_q.put(WorkerDoneData(scores=scores, fold_index=worker_data.fold_index))
+    except Exception as e:
+        print(e)
     signal.alarm(0)
+    exit()
 
 
 class TempSetContextManager:
@@ -161,18 +166,25 @@ def main():
     scores = collections.defaultdict(dict)
     for _ in range(cli.config.data.init_args.k):
         # get metric from worker
-        result = sweep_q.get()
+        result = sweep_q.get(timeout=TIMEOUT_S)
         # wait for worker to finish
-        worker.process.join()
-        # collect metric to dict & log metric to sweep_run
-        for name, value in result.scores.items():
-            scores[name][result.fold_index] = value
-            sweep_run.log(
-                {
-                    f'best_{name}': value,
-                    "fold_index": result.fold_index,
-                }
-            )
+        worker.process.join(TIMEOUT_S)
+        if worker.process.is_alive():
+            print("Worker timed out")
+            worker.process.terminate()
+            worker.process.join()
+        try:
+            # collect metric to dict & log metric to sweep_run
+            for name, value in result.scores.items():
+                scores[name][result.fold_index] = value
+                sweep_run.log(
+                    {
+                        f'best_{name}': value,
+                        "fold_index": result.fold_index,
+                    }
+                )
+        except Exception as e:
+            print(e)
 
     # Log mean of metrics
     scores_mean = {
@@ -183,8 +195,17 @@ def main():
         if sum(1 for value in fold_index_to_score.values() if value is not None) > 0
     }
 
-    sweep_run.log(scores_mean)
-    wandb.join()
+
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(60)  # 60 seconds to finish up
+
+    try:
+        sweep_run.log(scores_mean)
+        wandb.join()
+    except Exception as e:
+        print(e)
+
+    signal.alarm(0)
 
     print("*" * 40)
     print("Sweep URL:       ", sweep_url)
