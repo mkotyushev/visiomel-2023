@@ -240,27 +240,23 @@ class LogLossScore(Metric):
     full_state_update: bool = False
     def __init__(self):
         super().__init__()
-        self.add_state("preds", default=[])
+        self.add_state("probas", default=[])
         self.add_state("target", default=[])
 
-    def _input_format(self, preds: torch.Tensor, target: torch.Tensor):
-        return torch.stack((1 - preds, preds), dim=1), target
+    def update(self, probas: torch.Tensor, target: torch.Tensor):
+        assert probas.shape[0] == target.shape[0], \
+            f'probas and target must have same first dimension, ' \
+            f'got {probas.shape[0]} and {target.shape[0]}'
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor):
-        preds, target = self._input_format(preds, target)
-        assert preds.shape[0] == target.shape[0], \
-            f'preds and target must have same first dimension, ' \
-            f'got {preds.shape[0]} and {target.shape[0]}'
-
-        self.preds.append(preds)
+        self.probas.append(probas)
         self.target.append(target)
 
     def compute(self):
-        self.preds = torch.softmax(torch.cat(self.preds, dim=0), dim=1)
+        self.probas = torch.cat(self.probas, dim=0)
         self.target = torch.cat(self.target, dim=0)
-        if self.preds.isnan().any():
+        if self.probas.isnan().any():
             return np.nan
-        return log_loss(self.target.cpu().numpy(), self.preds.cpu().numpy(), eps=1e-16).item()
+        return log_loss(self.target.cpu().numpy(), self.probas.cpu().numpy(), eps=1e-16).item()
 
 
 def extract_features_last_only_single(model, x):
@@ -688,7 +684,7 @@ class SavePredictionsCallback(Callback):
         batch_idx: int,
         dataloader_idx: int = 0,
     ):
-        self.filenames.extend([path.split('/')[-1] for path in batch[3]])
+        self.filenames.extend([path.split('/')[-1] for path in batch[-1]])
         self.predictions.append(outputs)
 
     def on_predict_epoch_end(

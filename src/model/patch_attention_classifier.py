@@ -346,19 +346,20 @@ class PatchAttentionClassifier(VisiomelClassifier):
         
         return x
 
-    def extract_targets_and_preds_for_metric(self, preds, batch):
+    def extract_targets_and_probas_for_metric(self, preds, batch):
         """Extract preds and targets from batch.
         Could be overriden for custom batch / prediction structure.
         """
         if len(batch) == 4:  # no meta: x, mask, y, path
-            y, y_pred = batch[2].detach(), preds[:, 1].detach().float()
+            y, y_pred = batch[2].detach(), preds.detach().float()
         elif len(batch) == 5:  # with meta: x, mask, meta, y, path
-            y, y_pred = batch[3].detach(), preds[:, 1].detach().float()
+            y, y_pred = batch[3].detach(), preds.detach().float()
         else:
             raise ValueError(
                 f'Wrong batch structure: len(batch) == {len(batch)}, '
                 f'expected 4 or 5'
             )
         y, y_pred = self.remove_nans(y, y_pred)
+        y_pred = torch.softmax(y_pred, dim=1)
         return y, y_pred
 

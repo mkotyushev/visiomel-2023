@@ -45,7 +45,7 @@ class VisiomelModel(LightningModule):
     def configure_metrics(self):
         """Configure task-specific metrics."""
 
-    def bootstrap_metric(self, preds, targets, metric: Metric):
+    def bootstrap_metric(self, probas, targets, metric: Metric):
         """Calculate metric on bootstrap samples."""
 
     @staticmethod
@@ -74,18 +74,19 @@ class VisiomelModel(LightningModule):
             y = y[~nan_mask]
         return y, y_pred
 
-    def extract_targets_and_preds_for_metric(self, preds, batch):
+    def extract_targets_and_probas_for_metric(self, preds, batch):
         """Extract preds and targets from batch.
         Could be overriden for custom batch / prediction structure.
         """
         y, y_pred = batch[1].detach(), preds[:, 1].detach().float()
         y, y_pred = self.remove_nans(y, y_pred)
+        y_pred = torch.softmax(y_pred, dim=1)
         return y, y_pred
 
     def update_metrics(self, span, preds, batch):
         """Update train metrics."""
-        y, y_pred = self.extract_targets_and_preds_for_metric(preds, batch)
-        self.cat_metrics[span]['preds'].update(y_pred)
+        y, y_proba = self.extract_targets_and_probas_for_metric(preds, batch)
+        self.cat_metrics[span]['probas'].update(y_proba)
         self.cat_metrics[span]['targets'].update(y)
 
     def on_train_epoch_start(self) -> None:
@@ -194,11 +195,11 @@ class VisiomelModel(LightningModule):
         
         # Get concatenated preds and targets
         # and reset them
-        preds, targets = \
-            self.cat_metrics[span]['preds'].compute().cpu(),  \
+        probas, targets = \
+            self.cat_metrics[span]['probas'].compute().cpu(),  \
             self.cat_metrics[span]['targets'].compute().cpu()
         if reset:
-            self.cat_metrics[span]['preds'].reset()
+            self.cat_metrics[span]['probas'].reset()
             self.cat_metrics[span]['targets'].reset()
 
         # Calculate and log metrics
@@ -206,7 +207,7 @@ class VisiomelModel(LightningModule):
             metric_value = None
             if prefix == 'val_ds':  # bootstrap
                 if self.hparams.n_bootstrap > 0:
-                    metric_value = self.bootstrap_metric(preds, targets, metric)
+                    metric_value = self.bootstrap_metric(probas[:, 1], targets, metric)
                 else:
                     logger.warning(
                         f'prefix == val_ds but n_bootstrap == 0. '
@@ -214,7 +215,7 @@ class VisiomelModel(LightningModule):
                         f'and logged.'
                     )
             else:
-                metric.update(preds, targets)
+                metric.update(probas[:, 1], targets)
                 metric_value = metric.compute()
                 metric.reset()
             
@@ -415,7 +416,7 @@ class VisiomelClassifier(VisiomelModel):
         self.save_hyperparameters()
         self.loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
 
-    def bootstrap_metric(self, preds, targets, metric: Metric):
+    def bootstrap_metric(self, probas, targets, metric: Metric):
         """Calculate metric on bootstrap samples."""
         assert self.hparams.num_classes == 2, 'Only binary classification is supported.'
 
@@ -427,7 +428,7 @@ class VisiomelClassifier(VisiomelModel):
         for _ in range(self.hparams.n_bootstrap):
             neg_indices_sample = neg_indices[torch.randperm(neg_indices.shape[0])[:pos_indices.shape[0]]]
             indices = torch.cat([neg_indices_sample, pos_indices])
-            metric.update(preds[indices], targets[indices])
+            metric.update(probas[indices], targets[indices])
             metric_values.append(
                 metric.compute()
             )
@@ -455,13 +456,13 @@ class VisiomelClassifier(VisiomelModel):
             {
                 'train_metrics': ModuleDict(
                     {
-                        'preds': CatMetric(),
+                        'probas': CatMetric(),
                         'targets': CatMetric()
                     }
                 ),
                 'val_metrics': ModuleDict(
                     {
-                        'preds': CatMetric(),
+                        'probas': CatMetric(),
                         'targets': CatMetric()
                     }
                 ),
