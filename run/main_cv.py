@@ -9,8 +9,6 @@ import wandb
 from src.utils.utils import ModelCheckpointNoSave, MyLightningCLI, TrainerWandb
 
 
-TIMEOUT_S = 1200
-
 # Set up logging
 logging.basicConfig(
     level=logging.ERROR,
@@ -87,9 +85,14 @@ def train(sweep_q, worker_q):
     except Exception as e:
         print(e)
 
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(60)  # 60 seconds to finish up
+
     run.log(scores)
     wandb.join()
     sweep_q.put(WorkerDoneData(scores=scores, fold_index=worker_data.fold_index))
+    
+    signal.alarm(0)
 
 
 class TempSetContextManager:
@@ -181,7 +184,6 @@ def main():
     }
 
     sweep_run.log(scores_mean)
-    signal.alarm(60)  # 60 seconds to finish up
     wandb.join()
 
     print("*" * 40)
@@ -198,10 +200,7 @@ def handler(signum, frame):
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGALRM, handler)
-    signal.alarm(TIMEOUT_S)
     try:
         main()
     except Exception as e: 
         print(e)
-    signal.alarm(0)
