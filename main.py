@@ -2,9 +2,9 @@ import gc
 import os
 from pathlib import Path
 import sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'lib')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'visiomel-2023')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'visiomel-2023', 'lib')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'visiomel-2023', 'src')))
 
 import argparse
 import pandas as pd
@@ -142,21 +142,21 @@ def main():
                 labels.append(y.detach().cpu())
                 paths.append(path)
     
+    del patch_embed
+    gc.collect()
+    torch.cuda.empty_cache()
+
     df_test = pd.DataFrame({
         'path': paths,
         'label': labels,  # fake all 0 labels here due to mock
         'features': features,
     })
 
-    # Save embeddings to disk to have unified inference with
-    # training via VisiomelDatamoduleEmb
+    # # Save embeddings to disk to have unified inference with
+    # # training via VisiomelDatamoduleEmb
     df_test.to_pickle('df_test.pkl')
     # df_test = pd.read_pickle('df_test.pkl')  # for debug
 
-    del patch_embed
-    gc.collect()
-    torch.cuda.empty_cache()
-    
     # ================================================================
     #                               SUP
     # ================================================================
@@ -206,15 +206,14 @@ def main():
             attention_dropout=0.1101479509435598,
             attention_num_heads=solution_to_params[args.solution][solution_index]['pac']['attention_num_heads'],
             attention_hidden_dim=solution_to_params[args.solution][solution_index]['pac']['attention_hidden_dim'],
-        )
-        model = model.cuda().eval()
+        ).cuda().eval()
 
         # Patch attention classifier model
-        for state_dict_path in Path(
+        for state_dict_path in tqdm(Path(
             solution_to_params[args.solution][solution_index]['pac']['state_dict_dir']
-        ).glob('**/epoch=*.pth'):
+        ).glob('**/epoch=*.pth')):
             state_dict = torch.load(state_dict_path)
-            model.load_state_dict(state_dict)
+            model.load_state_dict(state_dict, strict=True)
 
             pathes, y_logits = [], []
             with torch.no_grad():
