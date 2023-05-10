@@ -7,7 +7,7 @@ command:
   - ${program}
   - fit
   - --config
-  - run/configs/sweeps/swin-patch-attention-classifier-ll.yaml
+  - run/configs/sweeps/swin-patch-attention-classifier-ll-save.yaml
   - ${args}
 method: random
 parameters:
