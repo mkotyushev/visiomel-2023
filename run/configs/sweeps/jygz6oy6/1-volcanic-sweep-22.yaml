@@ -1,0 +1,61 @@
+# /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier-ds-ll.yaml --data.init_args.batch_size=32 --data.init_args.meta_filepath=/workspace/data/train_metadata_pPa7YD3.csv --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.2833084012695066 --model.init_args.attention_hidden_dim=32 --model.init_args.attention_num_heads=1 --model.init_args.label_smoothing=0.06549081297139892 --model.lr=0.0036326721371225585 --trainer.max_epochs=100
+# https://wandb.ai/mkotyushev_/visiomel/runs/4yojajcm/overview?workspace=user-mkotyushev_
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/sweeps/swin-patch-attention-classifier-ll.yaml
+  - ${args}
+method: random
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 100
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 32
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 1
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 32
+  data.init_args.meta_filepath:
+    distribution: categorical
+    values:
+    - /workspace/data/train_metadata_pPa7YD3.csv
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.2833084012695066
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.0036326721371225585
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.06549081297139892 
+  data.init_args.k_test:
+    distribution: categorical
+    values:
+    - 5
+  data.init_args.fold_index_test:
+    distribution: categorical
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
