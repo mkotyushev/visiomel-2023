@@ -24,9 +24,118 @@ from src.model.patch_attention_classifier import PatchBackbone, PatchAttentionCl
 from src.utils.utils import get_X_y_groups, find_classes_mock, make_dataset_mock
 
 
+solution_to_params = {
+    'val_ll': [
+        {
+            'datamodule': {
+                'meta_filepath': None,
+            },
+            'pac': {
+                'attention_num_heads': 8,
+                'attention_hidden_dim': 64,
+                'state_dict_dir': './weights-inference/val-ll/seed-0'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': None,
+            },
+            'pac': {
+                'attention_num_heads': 8,
+                'attention_hidden_dim': 64,
+                'state_dict_dir': './weights-inference/val-ll/seed-1'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': None,
+            },
+            'pac': {
+                'attention_num_heads': 8,
+                'attention_hidden_dim': 64,
+                'state_dict_dir': './weights-inference/val-ll/seed-2'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': None,
+            },
+            'pac': {
+                'attention_num_heads': 8,
+                'attention_hidden_dim': 64,
+                'state_dict_dir': './weights-inference/val-ll/seed-3'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': None,
+            },
+            'pac': {
+                'attention_num_heads': 8,
+                'attention_hidden_dim': 64,
+                'state_dict_dir': './weights-inference/val-ll/seed-4'
+            }
+        },
+    ],
+    'val_ds_ll': [
+        {
+            'datamodule': {
+                'meta_filepath': './data/test_metadata.csv',
+            },
+            'pac': {
+                'attention_num_heads': 1,
+                'attention_hidden_dim': 32,
+                'state_dict_dir': './weights-inference/val-ds-ll/seed-0'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': './data/test_metadata.csv',
+            },
+            'pac': {
+                'attention_num_heads': 1,
+                'attention_hidden_dim': 32,
+                'state_dict_dir': './weights-inference/val-ds-ll/seed-1'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': './data/test_metadata.csv',
+            },
+            'pac': {
+                'attention_num_heads': 1,
+                'attention_hidden_dim': 32,
+                'state_dict_dir': './weights-inference/val-ds-ll/seed-2'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': './data/test_metadata.csv',
+            },
+            'pac': {
+                'attention_num_heads': 1,
+                'attention_hidden_dim': 32,
+                'state_dict_dir': './weights-inference/val-ds-ll/seed-3'
+            }
+        },
+        {
+            'datamodule': {
+                'meta_filepath': './data/test_metadata.csv',
+            },
+            'pac': {
+                'attention_num_heads': 1,
+                'attention_hidden_dim': 32,
+                'state_dict_dir': './weights-inference/val-ds-ll/seed-4'
+            }
+        },
+    ],
+}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', type=str, default='./data')
+    parser.add_argument('--solution', type=str, choices=['val_ll', 'val_ds_ll'], default='val_ll')
     args = parser.parse_args()
 
     seed_everything(0)
@@ -124,93 +233,80 @@ def main():
     # ================================================================
     #                               SUP
     # ================================================================
-    
-    datamodule = VisiomelDatamoduleEmb(
-        embedding_pathes=['df_test.pkl'],	
-        embedding_pathes_aug_with_repeats=['df_test.pkl'],	
-        batch_size=32,
-        k=None,
-        fold_index=0,
-        k_test=None,
-        fold_index_test=0,
-        split_seed=0,
-        num_workers=0,
-        pin_memory=False,
-        prefetch_factor=2,
-        persistent_workers=False,
-        sampler=None,
-        num_workers_saturated=0,
-    )
-    datamodule.setup()
+    data = defaultdict(list)
 
-    data = defaultdict(dict)
-
-    # Patch attention classifier model (5 folds)
-    for fold_index in range(5):
-        state_dict = torch.load(f'./weights-inference/pac_fold_{fold_index}.pth')
-        # best_pac_params = (
-        #     '--data.init_args.batch_size=32 '
-        #     '--data.init_args.sampler=weighted_upsampling '
-        #     '--model.init_args.attention_dropout=0.1101479509435598 '
-        #     '--model.init_args.attention_hidden_dim=64 '
-        #     '--model.init_args.attention_num_heads=8 '
-        #     '--model.init_args.label_smoothing=0.19365209170598277 '
-        #     '--model.lr=0.0008549720251132047 '
-        #     '--trainer.max_epochs=200'
-        # )
-        model = PatchAttentionClassifier(
-            num_classes=2,
-            patch_embed_backbone_name='swinv2_base_window12to24_192to384_22kft1k',
-            patch_embed_backbone_ckpt_path=None,
-            patch_size=1536,
-            patch_batch_size=32,
-            optimizer_init={'init_args': {'lr': 0.0008549720251132047}},
-            lr_scheduler_init=None,
-            pl_lrs_cfg=None,
-            finetuning=None,
-            log_norm_verbose=False,
-            lr_layer_decay=1.0,
-            grad_checkpointing=False,
-            attention_hidden_dim=64,
-            patch_embed_caching=False,
-            emb_precalc=True,
-            emb_precalc_dim=1024,
-            label_smoothing=0.19365209170598277,
-            lr=0.0008549720251132047,
-            attention_num_heads=8,
-            attention_dropout=0.1101479509435598,
+    for solution_index in range(len(solution_to_params[args.solution])):
+        datamodule = VisiomelDatamoduleEmb(
+            embedding_pathes=['df_test.pkl'],	
+            embedding_pathes_aug_with_repeats=['df_test.pkl'],	
+            batch_size=32,
+            k=None,
+            fold_index=0,
+            k_test=None,
+            fold_index_test=0,
+            split_seed=0,
+            num_workers=0,
+            pin_memory=False,
+            prefetch_factor=2,
+            persistent_workers=False,
+            sampler=None,
+            num_workers_saturated=0,
+            meta_filepath=solution_to_params[args.solution][solution_index]['datamodule']['meta_filepath'],
         )
-        model.load_state_dict(state_dict)
-        model = model.cuda().eval()
+        datamodule.setup()
 
-        pathes, y_logits = [], []
-        with torch.no_grad():
-            for batch in datamodule.test_dataloader():
-                x_batch, mask_batch, _, path_batch = batch
-                y_logits.append(model(x_batch.cuda(), mask_batch.cuda()).detach().cpu())
-                pathes.extend(path_batch)
-        y_proba = torch.softmax(torch.cat(y_logits, dim=0), dim=1)
-        
-        data['pac'][fold_index] = y_proba[:, 1]
-    data['path'] = pathes  # same for all fold, so take last one
+        # Patch attention classifier model (5 folds)
+        for fold_index in range(5):
+            state_dict = torch.load(
+                f'{solution_to_params[args.solution][solution_index]["pac"]["state_dict_dir"]}/'
+                f'pac_fold_{fold_index}.pth'
+            )
+            # lr, label_smoothing, attention_dropout etc. are not used
+            # during inference, so we can pass any values here
+            model = PatchAttentionClassifier(
+                num_classes=2,
+                patch_embed_backbone_name='swinv2_base_window12to24_192to384_22kft1k',
+                patch_embed_backbone_ckpt_path=None,
+                patch_size=1536,
+                patch_batch_size=32,
+                optimizer_init={'init_args': {'lr': 0.0008549720251132047}},
+                lr_scheduler_init=None,
+                pl_lrs_cfg=None,
+                finetuning=None,
+                log_norm_verbose=False,
+                lr_layer_decay=1.0,
+                grad_checkpointing=False,
+                patch_embed_caching=False,
+                emb_precalc=True,
+                emb_precalc_dim=1024,
+                label_smoothing=0.19365209170598277,
+                lr=0.0008549720251132047,
+                attention_dropout=0.1101479509435598,
+                attention_num_heads=solution_to_params[args.solution][solution_index]['pac']['attention_num_heads'],
+                attention_hidden_dim=solution_to_params[args.solution][solution_index]['pac']['attention_hidden_dim'],
+            )
+            model.load_state_dict(state_dict)
+            model = model.cuda().eval()
 
-    # # SVC
-    # clf = load('svc.joblib') 
-    # X_test, _ = get_X_y_groups(df_test)
-    # y_proba = clf.predict_proba(X_test)
-    # data['svc'][-1] = y_proba[:, 1]
+            pathes, y_logits = [], []
+            with torch.no_grad():
+                for batch in datamodule.test_dataloader():
+                    x_batch, mask_batch, _, path_batch = batch
+                    y_logits.append(model(x_batch.cuda(), mask_batch.cuda()).detach().cpu())
+                    pathes.extend(path_batch)
+            y_proba = torch.softmax(torch.cat(y_logits, dim=0), dim=1)
+            
+            data['pac'].append(y_proba[:, 1])
+    data['path'].extend(pathes)  # same for all fold, so take last one
 
     # Ensemble
     df = pd.DataFrame(
         {
-            'pac': sum(data['pac'].values()) / len(data['pac']),
+            'pac': sum(data['pac']) / len(data['pac']),
             'path': data['path'],
-            # 'svc': data['svc'][-1],
         }
     )
     df_test = pd.merge(df_test, df, on='path', how='left')
-    # weights = [0.5, 0.5]
-    # df_test['relapse'] = df_test['pac'] * weights[0] + df_test['svc'] * weights[1]
     df_test['relapse'] = df_test['pac']
 
     # Save submission
