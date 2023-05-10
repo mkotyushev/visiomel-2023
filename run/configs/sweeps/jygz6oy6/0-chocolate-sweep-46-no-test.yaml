@@ -47,3 +47,16 @@ parameters:
     distribution: categorical
     values:
     - 0.05826853931525197 
+  data.init_args.split_seed:
+    distribution: categorical
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
