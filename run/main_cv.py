@@ -74,7 +74,7 @@ def train(sweep_q, worker_q):
             for cb in cli.trainer.checkpoint_callbacks:
                 if cb is cb_best:
                     continue
-                if not isinstance(cb_best, ModelCheckpointNoSave):
+                if not isinstance(cb, ModelCheckpointNoSave):
                     continue
 
                 metric_value = cb.ith_epoch_score(best_epoch)
