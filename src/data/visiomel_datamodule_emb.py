@@ -253,11 +253,10 @@ class VisiomelDatamoduleEmb(LightningDataModule):
                 # in terms of filenames
                 check_no_split_intersection(self.train_dataset, self.val_dataset, self.test_dataset)
             else:
-                self.train_dataset = EmbeddingDataset(
+                self.train_dataset = self.val_dataset = self.test_dataset = EmbeddingDataset(
                     self.hparams.embedding_pathes, 
                     meta_filepath=self.hparams.meta_filepath
                 )
-                self.val_dataset = None
 
     def train_dataloader(self) -> DataLoader:
         sampler, shuffle = None, True
