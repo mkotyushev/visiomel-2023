@@ -57,6 +57,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', type=str, default='./data')
     parser.add_argument('--solution', type=str, choices=['val_ll', 'val_ds_ll'], default='val_ll')
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
     seed_everything(0)
@@ -156,6 +157,7 @@ def main():
     # ================================================================
     data = defaultdict(list)
 
+    pathes_first = None
     for solution_index in range(len(solution_to_params[args.solution])):
         datamodule = VisiomelDatamoduleEmb(
             embedding_pathes=['df_test.pkl'],	
@@ -216,6 +218,12 @@ def main():
                     y_logits.append(model(x_batch.cuda(), mask_batch.cuda()).detach().cpu())
                     pathes.extend(path_batch)
             y_proba = torch.softmax(torch.cat(y_logits, dim=0), dim=1)
+
+            if pathes_first is None:
+                pathes_first = pathes
+            else:
+                if args.debug:
+                    assert pathes_first == pathes
             
             data['pac'].append(y_proba[:, 1])
     data['path'].extend(pathes)  # same for all fold, so take last one
