@@ -207,7 +207,7 @@ def main():
         # Patch attention classifier model
         for state_dict_path in Path(
             solution_to_params[args.solution][solution_index]['pac']['state_dict_dir']
-        ).glob('**/*.pth'):
+        ).glob('**/epoch=*.pth'):
             state_dict = torch.load(state_dict_path)
             model.load_state_dict(state_dict)
 
