@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 import pandas as pd
 import pickle
+import pyvips
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer, Callback
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
@@ -120,7 +121,12 @@ def load_pretrained(state_dict, model):
 
 def loader_with_filepath(path):
     """Load image and set filepath attribute."""
-    img = default_loader(path)
+    if path.endswith('.png'):
+        img = default_loader(path)
+    else:
+        img = pyvips.Image.new_from_file(path, page=4)
+        img = Image.fromarray(img.numpy())
+
     img.filepath = path
     return img
 
