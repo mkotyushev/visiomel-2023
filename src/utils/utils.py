@@ -15,7 +15,7 @@ from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning import Trainer, Callback
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from torchvision.datasets.folder import default_loader
+from torchvision.datasets.folder import default_loader, has_file_allowed_extension
 from typing import Callable, Dict, List, Optional, Tuple, Union, Any, Literal, cast
 from model.patch_embed_with_backbone import SwinTransformerV2Modded
 from torchmetrics import Metric
