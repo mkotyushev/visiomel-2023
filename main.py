@@ -1,3 +1,4 @@
+import gc
 import os
 from pathlib import Path
 import sys
@@ -91,7 +92,7 @@ def main():
         for k, v in 
         torch.load(patch_embed_backbone_state_dict_path).items()
     }
-    backbone.load_state_dict(state_dict, strict=False)
+    print(backbone.load_state_dict(state_dict, strict=False))
     patch_embed = PatchBackbone(
         backbone=backbone, 
         patch_size=patch_size, 
@@ -151,6 +152,10 @@ def main():
     # training via VisiomelDatamoduleEmb
     df_test.to_pickle('df_test.pkl')
     # df_test = pd.read_pickle('df_test.pkl')  # for debug
+
+    del patch_embed
+    gc.collect()
+    torch.cuda.empty_cache()
     
     # ================================================================
     #                               SUP
