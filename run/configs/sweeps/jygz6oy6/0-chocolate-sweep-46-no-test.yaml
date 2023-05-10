@@ -1,0 +1,49 @@
+# /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier-ds-ll.yaml --data.init_args.batch_size=64 --data.init_args.meta_filepath=none --data.init_args.sampler=none --model.init_args.attention_dropout=0.17720104663887518 --model.init_args.attention_hidden_dim=64 --model.init_args.attention_num_heads=8 --model.init_args.label_smoothing=0.05826853931525197 --model.lr=0.006444923013487022 --trainer.max_epochs=200
+# https://wandb.ai/mkotyushev_/visiomel/runs/lg5b7wco/overview?workspace=user-mkotyushev_
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/sweeps/swin-patch-attention-classifier-ll-save.yaml
+  - ${args}
+method: grid
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 200
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 64
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 8
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 64
+  data.init_args.meta_filepath:
+    distribution: categorical
+    values:
+    - none
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - none
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.17720104663887518
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.006444923013487022
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.05826853931525197 

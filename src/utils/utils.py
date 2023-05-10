@@ -637,6 +637,25 @@ class PenalizedBinaryFBetaScore(BinaryFBetaScore):
 
 
 class ModelCheckpointNoSave(ModelCheckpoint):
+    def best_epoch(self) -> int:
+        # exmple: epoch=10-step=1452.ckpt
+        return int(self.best_model_path.split('=')[-2].split('-')[0])
+    
+    def ith_epoch_score(self, i: int) -> Optional[float]:
+        # exmple: epoch=10-step=1452.ckpt
+        ith_epoch_filepath_list = [
+            filepath 
+            for filepath in self.best_k_models.keys()
+            if f'epoch={i}-' in filepath
+        ]
+        
+        # Not found
+        if not ith_epoch_filepath_list:
+            return None
+    
+        ith_epoch_filepath = ith_epoch_filepath_list[-1]
+        return self.best_k_models[ith_epoch_filepath]
+
     def _save_checkpoint(self, trainer: Trainer, filepath: str) -> None:
         self._last_global_step_saved = trainer.global_step
 

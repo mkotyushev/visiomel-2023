@@ -41,22 +41,6 @@ trainer:
         mode: max
         save_on_train_epoch_end: false
         save_last: false
-    - class_path: src.utils.utils.ModelCheckpointNoSave
-      init_args:
-        save_top_k: 9999
-        monitor: val_bss_fn
-        every_n_epochs: 1
-        mode: min
-        save_on_train_epoch_end: false
-        save_last: false
-    - class_path: src.utils.utils.ModelCheckpointNoSave
-      init_args:
-        save_top_k: 9999
-        monitor: val_bss_fp
-        every_n_epochs: 1
-        mode: min
-        save_on_train_epoch_end: false
-        save_last: false
     # for actual saving
     # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
     - class_path: src.utils.utils.ModelCheckpointNoSave
@@ -99,22 +83,6 @@ trainer:
         monitor: val_ds_pf1s
         every_n_epochs: 1
         mode: max
-        save_on_train_epoch_end: false
-        save_last: false
-    - class_path: src.utils.utils.ModelCheckpointNoSave
-      init_args:
-        save_top_k: 9999
-        monitor: val_ds_bss_fn
-        every_n_epochs: 1
-        mode: min
-        save_on_train_epoch_end: false
-        save_last: false
-    - class_path: src.utils.utils.ModelCheckpointNoSave
-      init_args:
-        save_top_k: 9999
-        monitor: val_ds_bss_fp
-        every_n_epochs: 1
-        mode: min
         save_on_train_epoch_end: false
         save_last: false
 

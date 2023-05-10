@@ -7,10 +7,7 @@ command:
   - --config
   - run/configs/sweeps/swin-patch-attention-classifier-ds-ll.yaml
   - ${args}
-method: bayes
-metric:
-  goal: minimize
-  name: mean_best_val_ds_ll
+method: random
 parameters:
   trainer.max_epochs:
     distribution: categorical
@@ -24,6 +21,8 @@ parameters:
     - 32
     - 64
     - 128
+    - 256
+    - 512
   model.init_args.attention_num_heads:
     distribution: categorical
     values:
@@ -32,6 +31,7 @@ parameters:
     - 4
     - 8
     - 16
+    - 32
   data.init_args.batch_size:
     distribution: categorical
     values:

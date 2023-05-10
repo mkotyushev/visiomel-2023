@@ -1,0 +1,50 @@
+# jz4aa305, fluent-sweep-47, best by ll: 
+# /workspace/visiomel-2023/run/main_cv.py fit --config run/configs/sweeps/swin-patch-attention-classifier.yaml --data.init_args.batch_size=64 --data.init_args.meta_filepath=none --data.init_args.sampler=weighted_upsampling --model.init_args.attention_dropout=0.1477706952476074 --model.init_args.attention_hidden_dim=32 --model.init_args.attention_num_heads=16 --model.init_args.label_smoothing=0.08511952948026018 --model.lr=0.0014228938527160858 --trainer.max_epochs=200
+# https://wandb.ai/mkotyushev_/visiomel/runs/iw4box9a/overview?workspace=user-mkotyushev_
+program: run/main_cv.py
+command:
+  - ${env}
+  - /root/miniconda3/envs/visiomel-2023/bin/python
+  - ${program}
+  - fit
+  - --config
+  - run/configs/sweeps/nams2gt2-jz4aa305-nested-kfold/swin-patch-attention-classifier-val-ll.yaml
+  - ${args}
+method: grid
+parameters:
+  trainer.max_epochs:
+    distribution: categorical
+    values: 
+    - 200
+  model.init_args.attention_hidden_dim:
+    distribution: categorical
+    values:
+    - 32
+  model.init_args.attention_num_heads:
+    distribution: categorical
+    values:
+    - 16
+  data.init_args.batch_size:
+    distribution: categorical
+    values:
+    - 64
+  data.init_args.meta_filepath:
+    distribution: categorical
+    values:
+    - none
+  data.init_args.sampler:
+    distribution: categorical
+    values:
+    - weighted_upsampling
+  model.init_args.attention_dropout:
+    distribution: categorical
+    values:
+    - 0.1477706952476074
+  model.lr:
+    distribution: categorical
+    values:
+    - 0.0014228938527160858
+  model.init_args.label_smoothing:
+    distribution: categorical
+    values:
+    - 0.08511952948026018

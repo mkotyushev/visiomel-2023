@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, Optional, Set, Union
 import pickle
+from pytorch_lightning import seed_everything
 
 import numpy as np
 from pytorch_lightning import LightningDataModule, LightningModule
@@ -127,7 +128,40 @@ def calculate_metrics(y_true, y_proba, n_bootstrap=1000):
     return metrics
 
 
+def predict(model, dataloader):
+    mode = model.training
+    model.eval()
+    y_true, y_proba, pathes = [], [], []
+    with torch.no_grad():
+        for batch in dataloader:
+            meta = None
+            if len(batch) == 4:
+                x, mask, y, path = batch
+            else:
+                x, mask, meta, y, path = batch
+            
+            x, mask = x.cuda(), mask.cuda()
+
+            y_true.append(y)
+            y_proba.append(
+                torch.softmax(
+                    model(x, mask=mask, meta=None).float().detach().cpu(), 
+                    dim=1
+                ).numpy()
+            )
+            pathes.append(path)
+
+    y_proba = np.concatenate(y_proba, axis=0)
+    y_true = np.concatenate(y_true, axis=0)
+
+    model.train(mode=mode)
+
+    return y_true, y_proba, pathes
+
+
 def main():
+    seed_everything(0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint_root_dir', type=Path, default='./visiomel')
     parser.add_argument('--logs_dir', type=Path, default='./wandb')
@@ -181,48 +215,31 @@ def main():
                     'overwrite': True,
                 },
                 args=[
-                    'no_run',
+                    'validate',
                     '--config', str(fold_to_ckpt_info[fold_index_test][fold_index]['config_path']),
+                    '--ckpt_path', str(fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path']),
                 ],
                 run=True,
             )
 
-            data['pac'][fold_index] = {}
-            # Predict on val
             cli.datamodule.setup()
-            y_proba = torch.softmax(
-                torch.concat(
-                    cli.trainer.predict(
-                        model=cli.model,
-                        dataloaders=cli.datamodule.val_dataloader(),
-                        return_predictions=True,
-                        ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
-                    ), 
-                    dim=0
-                ).float(), 
-                dim=1
-            ).numpy()
-            _, y_val, _ = get_X_y_groups(cli.datamodule.val_dataset.data)
+            model = cli.model.load_from_checkpoint(
+                str(fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'])
+            ).cuda().eval()
+
+            # Predict on val
+            data['pac'][fold_index] = {}
+            y_val, y_proba, pathes = predict(model, cli.datamodule.val_dataloader())
             data['pac'][fold_index]['y_proba_val'] = y_proba[:, 1]
             data['pac'][fold_index]['gt_val'] = y_val
+            data['pac'][fold_index]['pathes_val'] = pathes
 
             # Predict on test
             if args.nested:
-                y_proba = torch.softmax(
-                    torch.concat(
-                        cli.trainer.predict(
-                            model=cli.model,
-                            datamodule=cli.datamodule, 
-                            return_predictions=True,
-                            ckpt_path=fold_to_ckpt_info[fold_index_test][fold_index]['ckpt_path'],
-                        ), 
-                        dim=0
-                    ).float(), 
-                    dim=1
-                ).numpy()
-                _, y_test, _ = get_X_y_groups(cli.datamodule.test_dataset.data)
+                y_test, y_proba, pathes = predict(model, cli.datamodule.test_dataloader())
                 data['pac'][fold_index]['y_proba_test'] = y_proba[:, 1]
                 data['pac'][fold_index]['gt_test'] = y_test
+                data['pac'][fold_index]['pathes_test'] = pathes
 
         if args.nested:
             # Mean test predictions over folds
