@@ -9,7 +9,7 @@ command:
   - --config
   - run/configs/sweeps/swin-patch-attention-classifier-ll-save.yaml
   - ${args}
-method: random
+method: grid
 parameters:
   trainer.max_epochs:
     distribution: categorical
