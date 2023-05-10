@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import sys
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'lib')))
@@ -33,47 +34,7 @@ solution_to_params = {
             'pac': {
                 'attention_num_heads': 8,
                 'attention_hidden_dim': 64,
-                'state_dict_dir': './weights-inference/val-ll/seed-0'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': None,
-            },
-            'pac': {
-                'attention_num_heads': 8,
-                'attention_hidden_dim': 64,
-                'state_dict_dir': './weights-inference/val-ll/seed-1'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': None,
-            },
-            'pac': {
-                'attention_num_heads': 8,
-                'attention_hidden_dim': 64,
-                'state_dict_dir': './weights-inference/val-ll/seed-2'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': None,
-            },
-            'pac': {
-                'attention_num_heads': 8,
-                'attention_hidden_dim': 64,
-                'state_dict_dir': './weights-inference/val-ll/seed-3'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': None,
-            },
-            'pac': {
-                'attention_num_heads': 8,
-                'attention_hidden_dim': 64,
-                'state_dict_dir': './weights-inference/val-ll/seed-4'
+                'state_dict_dir': './weights-inference/val-ll'
             }
         },
     ],
@@ -85,47 +46,7 @@ solution_to_params = {
             'pac': {
                 'attention_num_heads': 1,
                 'attention_hidden_dim': 32,
-                'state_dict_dir': './weights-inference/val-ds-ll/seed-0'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': './data/test_metadata.csv',
-            },
-            'pac': {
-                'attention_num_heads': 1,
-                'attention_hidden_dim': 32,
-                'state_dict_dir': './weights-inference/val-ds-ll/seed-1'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': './data/test_metadata.csv',
-            },
-            'pac': {
-                'attention_num_heads': 1,
-                'attention_hidden_dim': 32,
-                'state_dict_dir': './weights-inference/val-ds-ll/seed-2'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': './data/test_metadata.csv',
-            },
-            'pac': {
-                'attention_num_heads': 1,
-                'attention_hidden_dim': 32,
-                'state_dict_dir': './weights-inference/val-ds-ll/seed-3'
-            }
-        },
-        {
-            'datamodule': {
-                'meta_filepath': './data/test_metadata.csv',
-            },
-            'pac': {
-                'attention_num_heads': 1,
-                'attention_hidden_dim': 32,
-                'state_dict_dir': './weights-inference/val-ds-ll/seed-4'
+                'state_dict_dir': './weights-inference/val-ds-ll'
             }
         },
     ],
@@ -255,38 +176,38 @@ def main():
         )
         datamodule.setup()
 
-        # Patch attention classifier model (5 folds)
-        for fold_index in range(5):
-            state_dict = torch.load(
-                f'{solution_to_params[args.solution][solution_index]["pac"]["state_dict_dir"]}/'
-                f'pac_fold_{fold_index}.pth'
-            )
-            # lr, label_smoothing, attention_dropout etc. are not used
-            # during inference, so we can pass any values here
-            model = PatchAttentionClassifier(
-                num_classes=2,
-                patch_embed_backbone_name='swinv2_base_window12to24_192to384_22kft1k',
-                patch_embed_backbone_ckpt_path=None,
-                patch_size=1536,
-                patch_batch_size=32,
-                optimizer_init={'init_args': {'lr': 0.0008549720251132047}},
-                lr_scheduler_init=None,
-                pl_lrs_cfg=None,
-                finetuning=None,
-                log_norm_verbose=False,
-                lr_layer_decay=1.0,
-                grad_checkpointing=False,
-                patch_embed_caching=False,
-                emb_precalc=True,
-                emb_precalc_dim=1024,
-                label_smoothing=0.19365209170598277,
-                lr=0.0008549720251132047,
-                attention_dropout=0.1101479509435598,
-                attention_num_heads=solution_to_params[args.solution][solution_index]['pac']['attention_num_heads'],
-                attention_hidden_dim=solution_to_params[args.solution][solution_index]['pac']['attention_hidden_dim'],
-            )
+        # lr, label_smoothing, attention_dropout etc. are not used
+        # during inference, so we can pass any values here
+        model = PatchAttentionClassifier(
+            num_classes=2,
+            patch_embed_backbone_name='swinv2_base_window12to24_192to384_22kft1k',
+            patch_embed_backbone_ckpt_path=None,
+            patch_size=1536,
+            patch_batch_size=32,
+            optimizer_init={'init_args': {'lr': 0.0008549720251132047}},
+            lr_scheduler_init=None,
+            pl_lrs_cfg=None,
+            finetuning=None,
+            log_norm_verbose=False,
+            lr_layer_decay=1.0,
+            grad_checkpointing=False,
+            patch_embed_caching=False,
+            emb_precalc=True,
+            emb_precalc_dim=1024,
+            label_smoothing=0.19365209170598277,
+            lr=0.0008549720251132047,
+            attention_dropout=0.1101479509435598,
+            attention_num_heads=solution_to_params[args.solution][solution_index]['pac']['attention_num_heads'],
+            attention_hidden_dim=solution_to_params[args.solution][solution_index]['pac']['attention_hidden_dim'],
+        )
+        model = model.cuda().eval()
+
+        # Patch attention classifier model
+        for state_dict_path in Path(
+            solution_to_params[args.solution][solution_index]['pac']['state_dict_dir']
+        ).glob('**/*.pth'):
+            state_dict = torch.load(state_dict_path)
             model.load_state_dict(state_dict)
-            model = model.cuda().eval()
 
             pathes, y_logits = [], []
             with torch.no_grad():
