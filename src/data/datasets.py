@@ -84,7 +84,7 @@ class VisiomelImageFolder(ImageFolder):
         return samples
 
 
-def preprocess_meta_emb(df, debug=True):
+def preprocess_meta_emb(df, debug=False):
     # keep age	sex	body_site	melanoma_history cols
     df = df.drop(columns=df.columns.difference(['filename', 'age', 'sex', 'body_site', 'melanoma_history']))
 
@@ -97,6 +97,8 @@ def preprocess_meta_emb(df, debug=True):
         assert df['age'].isna().sum() == 0
         assert (df['age'].min() == 0) & (df['age'].max() == 3)
         assert df['age'].dtype == int
+    else:
+        df.loc[(df['age'] < 0) | (df['age'] > 3), 'age'] = 0
 
     # Sex: remove nans, encode as int
     df['sex'] = df['sex'].fillna(1)
@@ -105,6 +107,8 @@ def preprocess_meta_emb(df, debug=True):
         assert df['sex'].isna().sum() == 0
         assert (df['sex'].min() == 0) & (df['sex'].max() == 1)
         assert df['sex'].dtype == int
+    else:
+        df.loc[(df['sex'] < 0) | (df['sex'] > 1), 'sex'] = 0
 
     # Body site: remove nans, encode as int
     df['body_site'] = df['body_site'].fillna('unknown')
@@ -143,6 +147,8 @@ def preprocess_meta_emb(df, debug=True):
         assert df['body_site'].isna().sum() == 0
         assert (df['body_site'].min() == 0) & (df['body_site'].max() == 3)
         assert df['body_site'].dtype == int
+    else:
+        df.loc[(df['body_site'] < 0) | (df['body_site'] > 3), 'body_site'] = 0
 
     # Melanoma history: remove nans, encode as int
     df['melanoma_history'] = df['melanoma_history'].fillna('UNK')
@@ -158,6 +164,8 @@ def preprocess_meta_emb(df, debug=True):
         assert df['melanoma_history'].isna().sum() == 0
         assert (df['melanoma_history'].min() == 0) & (df['melanoma_history'].max() == 2)
         assert df['melanoma_history'].dtype == int
+    else:
+        df.loc[(df['melanoma_history'] < 0) | (df['melanoma_history'] > 2), 'melanoma_history'] = 2
     
     return df
 
