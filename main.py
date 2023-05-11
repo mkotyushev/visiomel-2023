@@ -193,7 +193,7 @@ def main():
             patch_embed_backbone_name='swinv2_base_window12to24_192to384_22kft1k',
             patch_embed_backbone_ckpt_path=None,
             patch_size=1536,
-            patch_batch_size=32,
+            patch_batch_size=16,
             optimizer_init={'init_args': {'lr': 0.0008549720251132047}},
             lr_scheduler_init=None,
             pl_lrs_cfg=None,
