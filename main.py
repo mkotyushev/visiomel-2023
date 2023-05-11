@@ -221,12 +221,15 @@ def main():
             pathes, y_logits = [], []
             with torch.no_grad():
                 for batch in datamodule.test_dataloader():
+                    meta_batch = None
                     if len(batch) == 4:
                         x_batch, mask_batch, _, path_batch = batch
                     elif len(batch) == 5:
                         x_batch, mask_batch, meta_batch, _, path_batch = batch
 
-                    y_logits.append(model(x_batch.cuda(), mask=mask_batch.cuda(), meta=meta_batch.cuda()).detach().cpu())
+                    meta_batch_cuda = meta_batch.cuda() if meta_batch is not None else None
+
+                    y_logits.append(model(x_batch.cuda(), mask=mask_batch.cuda(), meta=meta_batch_cuda).detach().cpu())
                     pathes.extend(path_batch)
             y_proba = torch.softmax(torch.cat(y_logits, dim=0), dim=1)
 
