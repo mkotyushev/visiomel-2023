@@ -30,7 +30,7 @@ solution_to_params = {
     'val_ll': [
         {
             'datamodule': {
-                'meta_filepath': None,
+                'use_meta': False,
             },
             'pac': {
                 'attention_num_heads': 8,
@@ -42,7 +42,7 @@ solution_to_params = {
     'val_ds_ll': [
         {
             'datamodule': {
-                'meta_filepath': './data/test_metadata.csv',
+                'use_meta': True,
             },
             'pac': {
                 'attention_num_heads': 1,
@@ -57,7 +57,7 @@ solution_to_params = {
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', type=str, default='./data')
-    parser.add_argument('--solution', type=str, choices=['val_ll', 'val_ds_ll'], default='val_ll')
+    parser.add_argument('--solution', type=str, choices=['val_ll', 'val_ds_ll'], default='val_ds_ll')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
@@ -164,6 +164,9 @@ def main():
 
     pathes_first = None
     for solution_index in range(len(solution_to_params[args.solution])):
+        meta_filepath = None
+        if solution_to_params[args.solution][solution_index]['datamodule']['use_meta']:
+            meta_filepath = args.data_path + '/test_metadata.csv'
         datamodule = VisiomelDatamoduleEmb(
             embedding_pathes=['df_test.pkl'],	
             embedding_pathes_aug_with_repeats=['df_test.pkl'],	
@@ -179,7 +182,7 @@ def main():
             persistent_workers=False,
             sampler=None,
             num_workers_saturated=0,
-            meta_filepath=solution_to_params[args.solution][solution_index]['datamodule']['meta_filepath'],
+            meta_filepath=meta_filepath,
         )
         datamodule.setup()
 
@@ -218,8 +221,12 @@ def main():
             pathes, y_logits = [], []
             with torch.no_grad():
                 for batch in datamodule.test_dataloader():
-                    x_batch, mask_batch, _, path_batch = batch
-                    y_logits.append(model(x_batch.cuda(), mask_batch.cuda()).detach().cpu())
+                    if len(batch) == 4:
+                        x_batch, mask_batch, _, path_batch = batch
+                    elif len(batch) == 5:
+                        x_batch, mask_batch, meta_batch, _, path_batch = batch
+
+                    y_logits.append(model(x_batch.cuda(), mask=mask_batch.cuda(), meta=meta_batch.cuda()).detach().cpu())
                     pathes.extend(path_batch)
             y_proba = torch.softmax(torch.cat(y_logits, dim=0), dim=1)
 
