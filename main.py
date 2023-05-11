@@ -259,6 +259,7 @@ def main():
     df_test = pd.merge(df_test_format, df_test, on='filename', how='left')
     # assert (df_test['filename'].values == df_test_format['filename'].values).all()
     df_test['relapse'] = df_test['relapse_y']
+    df_test['relapse'] = df_test['relapse'].clip(0.0, 1.0)
     df_test[['filename', 'relapse']].to_csv('submission.csv', index=False)
     
 
